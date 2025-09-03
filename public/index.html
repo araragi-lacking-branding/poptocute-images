@@ -1,27 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Random Image</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
       height: 100%;
-      background: #000;
+      margin: 0;
+      font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial;
+      background: #fff;
       display: flex;
-      align-items: center;
       justify-content: center;
+      align-items: center;
+      padding: 1rem;
     }
     img {
       max-width: 100%;
-      max-height: 100%;
+      max-height: 75vh;
+      border-radius: 12px;
+      box-shadow: 0 6px 30px rgba(0,0,0,.15);
     }
   </style>
 </head>
 <body>
-  <img id="randomImage" alt="Random image">
+  <img id="randomImage" alt="Random image" loading="lazy" />
   <script>
     async function loadRandomImage() {
       try {
@@ -33,6 +36,7 @@
         }
         const randomImage = images[Math.floor(Math.random() * images.length)];
         document.getElementById('randomImage').src = randomImage;
+        document.getElementById('randomImage').alt = `Random image — ${randomImage.split('/').pop()}`;
       } catch (err) {
         console.error('Failed to load images.json', err);
         document.getElementById('randomImage').alt = 'Error loading image list';
