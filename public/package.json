@@ -1,0 +1,8 @@
+{
+  "name": "random-image-site",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node build/generate-manifest.js"
+  },
+  "devDependencies": {}
+}
