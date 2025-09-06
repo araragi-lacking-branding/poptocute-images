@@ -8,23 +8,40 @@
     html, body {
       height: 100%;
       margin: 0;
-      font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial;
+      font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
       background: #fff;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       padding: 1rem;
     }
+
     img {
       max-width: 100%;
-      max-height: 75vh;
+      max-height: 70vh;
       border-radius: 12px;
       box-shadow: 0 6px 30px rgba(0,0,0,.15);
+      margin-bottom: 0.75rem; /* space between image and disclaimer */
+    }
+
+    .disclaimer {
+      font-size: 0.9rem;
+      color: #444;
+      font-family: "Heisei Mincho", "MS Mincho", "SimSun", serif; /* Mincho-style fallback */
+      text-align: center;
+      max-width: 600px;
+      line-height: 1.4;
     }
   </style>
 </head>
 <body>
   <img id="randomImage" alt="Random image" loading="lazy" />
+
+  <div class="disclaimer">
+    ※ The images displayed do not belong to this site. We are working on adding accreditation and reporting features.
+  </div>
+
   <script>
     async function loadRandomImage() {
       try {
