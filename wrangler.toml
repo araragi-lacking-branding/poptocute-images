@@ -1,6 +1,8 @@
-name = "poptocute-images"
-main = "src/index.js"
-compatibility_date = "2025-09-06"
-
-[assets]
-directory = "./public"
+{
+    "name": "cutetopop-worker",
+    "main": "src/index.js",
+    "compatibility_date": "2025-09-06",
+    "assets": {
+        "directory": "./public"
+    }
+}
