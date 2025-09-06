@@ -1,0 +1,8 @@
+{
+    "name": "cutetopop-worker",
+    "compatibility_date": "2025-09-06",
+    "main": "src/index.js",
+    "assets": {
+        "directory": "./public"
+    }
+}
