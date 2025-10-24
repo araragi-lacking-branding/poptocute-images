@@ -1,4 +1,4 @@
-// src/index.js - Worker with KV caching for fast image loading
+// src/index.js - Worker with KV caching and smooth image transitions
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -267,6 +267,12 @@ async function serveMainPage() {
           border-radius: 12px;
           box-shadow: 0 6px 30px rgba(0,0,0,.15);
           margin-bottom: 0.75rem;
+          opacity: 0;
+          transition: opacity 0.3s ease-in-out;
+        }
+        
+        #randomImage.loaded {
+          opacity: 1;
         }
 
         .disclaimer {
@@ -295,9 +301,22 @@ async function serveMainPage() {
               document.getElementById('randomImage').alt = 'No images found';
               return;
             }
+            
             const randomImage = images[Math.floor(Math.random() * images.length)];
-            document.getElementById('randomImage').src = randomImage;
-            document.getElementById('randomImage').alt = \`Random image — \${randomImage.split('/').pop()}\`;
+            const img = document.getElementById('randomImage');
+            
+            // Preload image before showing
+            const tempImg = new Image();
+            tempImg.onload = () => {
+              img.src = tempImg.src;
+              img.alt = \`Random image — \${randomImage.split('/').pop()}\`;
+              // Trigger fade-in after image is loaded
+              requestAnimationFrame(() => {
+                img.classList.add('loaded');
+              });
+            };
+            tempImg.src = randomImage;
+            
           } catch (err) {
             console.error('Failed to load images.json', err);
             document.getElementById('randomImage').alt = 'Error loading image list';
