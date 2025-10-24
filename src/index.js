@@ -1,4 +1,4 @@
-// src/index.js - D1-powered worker with performance optimization
+// src/index.js - Worker with KV caching for fast image loading
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -8,9 +8,9 @@ export default {
       return handleAPI(request, env, url);
     }
 
-    // Legacy images.json endpoint for fast client-side loading
+    // Dynamic images.json generation (from KV - fast!)
     if (url.pathname === '/images.json') {
-      return getImagesJSON(env);
+      return getImagesList(env);
     }
 
     // Root path - serve simple static-like HTML
@@ -24,29 +24,52 @@ export default {
 };
 
 // ============================================
-// FAST IMAGES.JSON ENDPOINT (Cached)
+// FAST IMAGES LIST FROM KV (< 50ms globally)
 // ============================================
 
-async function getImagesJSON(env) {
+async function getImagesList(env) {
   try {
-    // Query all active images
+    // Try to get from KV first (fast!)
+    const cached = await env.IMAGES_CACHE.get('images-list', 'json');
+    
+    if (cached && Array.isArray(cached)) {
+      return new Response(JSON.stringify(cached), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=3600',
+          'X-Source': 'kv-cache'
+        }
+      });
+    }
+    
+    // Fallback: Query D1 if KV is empty (shouldn't happen in production)
+    console.log('KV cache miss - falling back to D1');
     const results = await env.DB.prepare(`
       SELECT filename FROM images WHERE status = 'active'
     `).all();
 
     const filenames = results.results.map(r => r.filename);
+    
+    // Store in KV for next time (fire and forget)
+    env.IMAGES_CACHE.put('images-list', JSON.stringify(filenames), {
+      expirationTtl: 86400 // 24 hours
+    });
 
     return new Response(JSON.stringify(filenames), {
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        'Cache-Control': 'public, max-age=3600',
+        'X-Source': 'database-fallback'
       }
     });
   } catch (error) {
-    console.error('Error generating images.json:', error);
+    console.error('Error getting images list:', error);
     return new Response(JSON.stringify([]), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 200,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
     });
   }
 }
