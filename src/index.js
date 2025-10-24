@@ -1,4 +1,3 @@
-
 // src/index.js - D1-powered worker for cutetopop
 export default {
   async fetch(request, env, ctx) {
@@ -184,6 +183,26 @@ async function getStats(env, corsHeaders) {
 // ============================================
 
 async function serveMainPage(env) {
+  // Pre-fetch first image to reduce perceived load time
+  let initialImage = null;
+  try {
+    initialImage = await env.DB.prepare(`
+      SELECT 
+        i.id,
+        i.filename,
+        i.alt_text,
+        c.name AS credit_name,
+        c.url AS credit_url
+      FROM images i
+      LEFT JOIN credits c ON i.credit_id = c.id
+      WHERE i.status = 'active'
+      ORDER BY RANDOM()
+      LIMIT 1
+    `).first();
+  } catch (error) {
+    console.error('Error pre-fetching image:', error);
+  }
+
   return new Response(`
     <!DOCTYPE html>
     <html lang="en">
@@ -347,8 +366,9 @@ async function serveMainPage(env) {
 
       <script>
         let currentImage = null;
+        const INITIAL_IMAGE = ${initialImage ? JSON.stringify(initialImage) : 'null'};
         
-        async function loadNewImage() {
+        async function loadNewImage(useInitial = false) {
           const nextBtn = document.getElementById('nextBtn');
           const loading = document.getElementById('loading');
           const error = document.getElementById('error');
@@ -364,12 +384,16 @@ async function serveMainPage(env) {
           img.classList.remove('loaded');
 
           try {
-            const response = await fetch('/api/random');
-            if (!response.ok) {
-              throw new Error('Failed to fetch image');
+            // Use pre-fetched initial image on first load
+            if (useInitial && INITIAL_IMAGE) {
+              currentImage = INITIAL_IMAGE;
+            } else {
+              const response = await fetch('/api/random');
+              if (!response.ok) {
+                throw new Error('Failed to fetch image');
+              }
+              currentImage = await response.json();
             }
-            
-            currentImage = await response.json();
 
             // Preload image
             const tempImg = new Image();
@@ -427,8 +451,8 @@ async function serveMainPage(env) {
           }
         }
 
-        // Load initial image
-        document.addEventListener('DOMContentLoaded', loadNewImage);
+        // Load initial image with pre-fetched data
+        document.addEventListener('DOMContentLoaded', () => loadNewImage(true));
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
