@@ -1,4 +1,4 @@
-// src/index.js - D1-powered worker for cutetopop
+// src/index.js - D1-powered worker with performance optimization
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -8,15 +8,48 @@ export default {
       return handleAPI(request, env, url);
     }
 
-    // Root path - serve the main page
+    // Legacy images.json endpoint for fast client-side loading
+    if (url.pathname === '/images.json') {
+      return getImagesJSON(env);
+    }
+
+    // Root path - serve simple static-like HTML
     if (url.pathname === '/') {
-      return serveMainPage(env);
+      return serveMainPage();
     }
 
     // Static assets (images, favicon, etc.)
     return env.ASSETS.fetch(request);
   },
 };
+
+// ============================================
+// FAST IMAGES.JSON ENDPOINT (Cached)
+// ============================================
+
+async function getImagesJSON(env) {
+  try {
+    // Query all active images
+    const results = await env.DB.prepare(`
+      SELECT filename FROM images WHERE status = 'active'
+    `).all();
+
+    const filenames = results.results.map(r => r.filename);
+
+    return new Response(JSON.stringify(filenames), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+      }
+    });
+  } catch (error) {
+    console.error('Error generating images.json:', error);
+    return new Response(JSON.stringify([]), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
 
 // ============================================
 // API HANDLERS
@@ -179,30 +212,10 @@ async function getStats(env, corsHeaders) {
 }
 
 // ============================================
-// HTML PAGE GENERATION
+// HTML PAGE GENERATION (Simple & Fast)
 // ============================================
 
-async function serveMainPage(env) {
-  // Pre-fetch first image to reduce perceived load time
-  let initialImage = null;
-  try {
-    initialImage = await env.DB.prepare(`
-      SELECT 
-        i.id,
-        i.filename,
-        i.alt_text,
-        c.name AS credit_name,
-        c.url AS credit_url
-      FROM images i
-      LEFT JOIN credits c ON i.credit_id = c.id
-      WHERE i.status = 'active'
-      ORDER BY RANDOM()
-      LIMIT 1
-    `).first();
-  } catch (error) {
-    console.error('Error pre-fetching image:', error);
-  }
-
+async function serveMainPage() {
   return new Response(`
     <!DOCTYPE html>
     <html lang="en">
@@ -225,245 +238,50 @@ async function serveMainPage(env) {
           box-sizing: border-box;
         }
 
-        .container {
-          text-align: center;
-          max-width: 90%;
-        }
-
         #randomImage {
           max-width: 100%;
           max-height: 70vh;
           border-radius: 12px;
           box-shadow: 0 6px 30px rgba(0,0,0,.15);
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        #randomImage.loaded {
-          opacity: 1;
-        }
-
-        .loading {
-          color: #666;
-          font-size: 1.1em;
-          margin: 20px 0;
-        }
-
-        .image-info {
-          margin-top: 20px;
-          font-size: 0.9rem;
-          color: #666;
-        }
-
-        .credit {
-          margin: 10px 0;
-          font-style: italic;
-          color: #444;
-        }
-
-        .credit a {
-          color: #0066cc;
-          text-decoration: none;
-        }
-
-        .credit a:hover {
-          text-decoration: underline;
-        }
-
-        .tags {
-          display: flex;
-          justify-content: center;
-          flex-wrap: wrap;
-          gap: 5px;
-          margin: 10px 0;
-        }
-
-        .tag {
-          background: #f0f0f0;
-          padding: 3px 10px;
-          border-radius: 15px;
-          font-size: 0.8em;
-          color: #555;
-        }
-
-        .controls {
-          margin-top: 20px;
-          display: flex;
-          gap: 10px;
-          justify-content: center;
-          flex-wrap: wrap;
-        }
-
-        button {
-          padding: 10px 20px;
-          border: 1px solid #ddd;
-          background: white;
-          border-radius: 25px;
-          cursor: pointer;
-          font-family: inherit;
-          font-size: 0.9em;
-          transition: all 0.2s ease;
-        }
-
-        button:hover:not(:disabled) {
-          background: #f5f5f5;
-          border-color: #bbb;
-        }
-
-        button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
+          margin-bottom: 0.75rem;
         }
 
         .disclaimer {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          padding: 15px;
+          font-size: 0.9rem;
+          color: #444;
           text-align: center;
-          font-size: 0.8rem;
-          color: #888;
-          background: rgba(255,255,255,0.95);
-          border-top: 1px solid #eee;
-        }
-
-        .error {
-          color: #cc0000;
-          margin: 20px 0;
-        }
-
-        @media (max-width: 600px) {
-          body { padding: 0.5rem; }
-          .controls { margin-top: 15px; }
-          button { padding: 8px 16px; font-size: 0.85em; }
+          max-width: 600px;
+          line-height: 1.4;
+          margin-top: 0.75rem;
         }
       </style>
     </head>
     <body>
-      <div class="container">
-        <div id="loading" class="loading">Loading...</div>
-        <div id="error" class="error" style="display: none;"></div>
-        
-        <div id="imageContainer" style="display: none;">
-          <img id="randomImage" alt="Random cute image" />
-          
-          <div class="image-info">
-            <div id="tags" class="tags"></div>
-            <div id="credit" class="credit"></div>
-            
-            <div class="controls">
-              <button onclick="loadNewImage()" id="nextBtn">Next Image</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <img id="randomImage" alt="Random image" loading="lazy" />
 
       <div class="disclaimer">
-        ※ Images displayed may not belong to this site. We are working on proper attribution.
-        <br>Help us credit creators correctly!
+        ※ The images displayed do not belong to this site. We are working on adding accreditation and reporting features.
       </div>
 
       <script>
-        let currentImage = null;
-        const INITIAL_IMAGE = ${initialImage ? JSON.stringify(initialImage) : 'null'};
-        
-        async function loadNewImage(useInitial = false) {
-          const nextBtn = document.getElementById('nextBtn');
-          const loading = document.getElementById('loading');
-          const error = document.getElementById('error');
-          const imageContainer = document.getElementById('imageContainer');
-          const img = document.getElementById('randomImage');
-          
-          // Show loading state
-          nextBtn.disabled = true;
-          nextBtn.textContent = 'Loading...';
-          loading.style.display = 'block';
-          error.style.display = 'none';
-          imageContainer.style.display = 'none';
-          img.classList.remove('loaded');
-
+        async function loadRandomImage() {
           try {
-            // Use pre-fetched initial image on first load
-            if (useInitial && INITIAL_IMAGE) {
-              currentImage = INITIAL_IMAGE;
-            } else {
-              const response = await fetch('/api/random');
-              if (!response.ok) {
-                throw new Error('Failed to fetch image');
-              }
-              currentImage = await response.json();
+            const response = await fetch('images.json', {cache: 'default'});
+            const images = await response.json();
+            if (!images || images.length === 0) {
+              document.getElementById('randomImage').alt = 'No images found';
+              return;
             }
-
-            // Preload image
-            const tempImg = new Image();
-            tempImg.onload = () => {
-              img.src = tempImg.src;
-              img.alt = currentImage.alt_text || 'Random image';
-              
-              // Display tags
-              const tagsContainer = document.getElementById('tags');
-              tagsContainer.innerHTML = '';
-              if (currentImage.tags && currentImage.tags.length > 0) {
-                currentImage.tags.forEach(tag => {
-                  const tagEl = document.createElement('span');
-                  tagEl.className = 'tag';
-                  tagEl.textContent = tag.display_name || tag.name;
-                  tagsContainer.appendChild(tagEl);
-                });
-              }
-              
-              // Display credit
-              const creditContainer = document.getElementById('credit');
-              if (currentImage.credit_name && currentImage.credit_name !== 'Unknown Artist') {
-                const creditText = currentImage.credit_url 
-                  ? \`Credit: <a href="\${currentImage.credit_url}" target="_blank" rel="noopener">\${currentImage.credit_name}</a>\`
-                  : \`Credit: \${currentImage.credit_name}\`;
-                creditContainer.innerHTML = creditText;
-              } else {
-                creditContainer.innerHTML = 'Credit: Unknown - Help us find the creator!';
-              }
-              
-              loading.style.display = 'none';
-              imageContainer.style.display = 'block';
-              
-              setTimeout(() => {
-                img.classList.add('loaded');
-              }, 10);
-
-              nextBtn.disabled = false;
-              nextBtn.textContent = 'Next Image';
-            };
-            
-            tempImg.onerror = () => {
-              throw new Error('Failed to load image file');
-            };
-            
-            tempImg.src = '/' + currentImage.filename;
-
+            const randomImage = images[Math.floor(Math.random() * images.length)];
+            document.getElementById('randomImage').src = randomImage;
+            document.getElementById('randomImage').alt = \`Random image — \${randomImage.split('/').pop()}\`;
           } catch (err) {
-            console.error('Error loading image:', err);
-            loading.style.display = 'none';
-            error.textContent = 'Error loading image. Please try again.';
-            error.style.display = 'block';
-            nextBtn.disabled = false;
-            nextBtn.textContent = 'Try Again';
+            console.error('Failed to load images.json', err);
+            document.getElementById('randomImage').alt = 'Error loading image list';
           }
         }
 
-        // Load initial image with pre-fetched data
-        document.addEventListener('DOMContentLoaded', () => loadNewImage(true));
-
-        // Keyboard navigation
-        document.addEventListener('keydown', (e) => {
-          if (e.code === 'Space' || e.code === 'ArrowRight') {
-            e.preventDefault();
-            const nextBtn = document.getElementById('nextBtn');
-            if (!nextBtn.disabled) {
-              loadNewImage();
-            }
-          }
-        });
+        loadRandomImage();
       </script>
     </body>
     </html>
