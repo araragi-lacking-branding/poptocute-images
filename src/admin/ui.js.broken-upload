@@ -279,7 +279,6 @@ export function generateAdminUI() {
             grid-template-columns: 1fr;
           }
         }
-
         .upload-section {
           background: white;
           padding: 20px;
@@ -287,6 +286,12 @@ export function generateAdminUI() {
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
           margin-bottom: 20px;
         }
+
+        .upload-section h2 {
+          font-size: 18px;
+          margin-bottom: 15px;
+        }
+
         .upload-area {
           border: 2px dashed #ddd;
           border-radius: 8px;
@@ -295,15 +300,129 @@ export function generateAdminUI() {
           cursor: pointer;
           transition: all 0.2s;
         }
-        .upload-area:hover { border-color: #4ecdc4; background: #f9fffe; }
-        .upload-text { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
-        .upload-hint { font-size: 13px; color: #999; }
-        #preview-list { margin: 15px 0; font-size: 14px; text-align: left; }
-        .upload-preview { display: flex; flex-direction: column; gap: 15px; align-items: center; }
-        .upload-progress { padding: 20px; }
-        .progress-bar { width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
-        .progress-fill { height: 100%; background: #4ecdc4; transition: width 0.3s; width: 0%; }
-        #upload-status { font-size: 14px; color: #666; }      </style>
+
+        .upload-area:hover {
+          border-color: #4ecdc4;
+          background: #f9fffe;
+        }
+
+        .upload-area.dragover {
+          border-color: #4ecdc4;
+          background: #e8f9f8;
+        }
+
+        .upload-placeholder svg {
+          color: #999;
+          margin-bottom: 15px;
+        }
+
+        .upload-text {
+          font-size: 16px;
+          font-weight: 600;
+          color: #333;
+          margin-bottom: 8px;
+        }
+
+        .upload-hint {
+          font-size: 13px;
+          color: #999;
+        }
+
+        .upload-preview {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+        }
+
+        .preview-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+          gap: 10px;
+          max-height: 300px;
+          overflow-y: auto;
+        }
+
+        .preview-item {
+          position: relative;
+          aspect-ratio: 1;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .preview-item img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .preview-item .remove {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          background: rgba(255,255,255,0.9);
+          border: none;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+          line-height: 1;
+        }
+
+        .preview-item .remove:hover {
+          background: #ff4444;
+          color: white;
+        }
+
+        .upload-actions {
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+        }
+
+        .upload-progress {
+          padding: 20px;
+        }
+
+        .progress-bar {
+          width: 100%;
+          height: 8px;
+          background: #f0f0f0;
+          border-radius: 4px;
+          overflow: hidden;
+          margin-bottom: 10px;
+        }
+
+        .progress-fill {
+          height: 100%;
+          background: #4ecdc4;
+          transition: width 0.3s;
+          width: 0%;
+        }
+
+        #upload-status {
+          font-size: 14px;
+          color: #666;
+        }
+
+        @media (max-width: 768px) {
+          .upload-area {
+            padding: 20px;
+          }
+          
+          .upload-text {
+            font-size: 14px;
+          }
+
+          .preview-grid {
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+          }
+        }
+      </style>
     </head>
     <body>
       <div class="header">
@@ -341,22 +460,31 @@ export function generateAdminUI() {
           </div>
         </div>
 
-        
-        <div class="upload-section">
+                <div class="upload-section">
           <h2>📤 Upload New Images</h2>
+          
           <div class="upload-area" id="upload-area">
-            <input type="file" id="file-input" accept="image/*" multiple style="display: none;" />
+            <input type="file" id="file-input" accept="image/*" multiple capture="environment" style="display: none;" />
             <div class="upload-placeholder" id="upload-placeholder">
-              <p class="upload-text">Tap or click to select images</p>
-              <p class="upload-hint">JPG, PNG, GIF, WEBP • Max 10MB each • Up to 20 files</p>
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <p class="upload-text">Drop images here or tap to select</p>
+              <p class="upload-hint">JPG, PNG, GIF, WEBP, AVIF • Max 10MB each • Select multiple</p>
             </div>
             <div class="upload-preview" id="upload-preview" style="display: none;">
-              <div id="preview-list"></div>
-              <button class="btn btn-secondary" onclick="cancelUpload()">Cancel</button>
-              <button class="btn btn-primary" onclick="uploadImages()">Upload</button>
+              <div id="preview-grid" class="preview-grid"></div>
+              <div class="upload-actions">
+                <button class="btn btn-secondary" onclick="cancelUpload()">Cancel</button>
+                <button class="btn btn-primary" onclick="uploadImages()">Upload <span id="upload-count"></span></button>
+              </div>
             </div>
             <div class="upload-progress" id="upload-progress" style="display: none;">
-              <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+              <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+              </div>
               <p id="upload-status">Uploading...</p>
             </div>
           </div>
@@ -621,84 +749,178 @@ export function generateAdminUI() {
           return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
+        // Upload functionality - MULTIPLE FILES
         let selectedFiles = [];
-        const MAX_FILES = 20;
-        
-        document.getElementById('upload-area').addEventListener('click', function() {
-          document.getElementById('file-input').click();
+        const MAX_FILES = 20; // Limit to prevent abuse
+
+        // Setup upload area
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadPlaceholder = document.getElementById('upload-placeholder');
+        const uploadPreview = document.getElementById('upload-preview');
+        const uploadProgress = document.getElementById('upload-progress');
+
+        // Click to select files
+        uploadArea.addEventListener('click', (e) => {
+          if (e.target.tagName !== 'BUTTON' && !e.target.classList.contains('remove')) {
+            fileInput.click();
+          }
         });
-        
-        document.getElementById('file-input').addEventListener('change', function(e) {
-          handleFiles(Array.from(e.target.files));
+
+        // Files selected
+        fileInput.addEventListener('change', (e) => {
+          handleFilesSelect(Array.from(e.target.files));
         });
-        
-        function handleFiles(files) {
-          if (files.length > MAX_FILES) {
-            alert('Maximum 20 files allowed');
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+          uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+          e.preventDefault();
+          uploadArea.classList.remove('dragover');
+          const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+          handleFilesSelect(files);
+        });
+
+        function handleFilesSelect(files) {
+          if (!files || files.length === 0) return;
+
+          // Check max files limit
+          if (selectedFiles.length + files.length > MAX_FILES) {
+            alert('Maximum ' + MAX_FILES + ' files allowed. Please select fewer files.');
             return;
           }
-          
-          var valid = files.filter(function(f) {
-            if (!f.type.startsWith('image/')) return false;
-            if (f.size > 10 * 1024 * 1024) return false;
+
+          // Validate each file
+          const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
+          const validFiles = files.filter(file => {
+            if (!allowedTypes.includes(file.type)) {
+              console.warn('Skipped ' + file.name + ': Invalid type');
+              return false;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+              console.warn('Skipped ' + file.name + ': Too large (>10MB)');
+              return false;
+            }
             return true;
           });
-          
-          if (valid.length === 0) {
-            alert('No valid images selected');
+
+          if (validFiles.length === 0) {
+            alert('No valid files selected. Allowed: JPG, PNG, GIF, WEBP, AVIF (max 10MB each)');
             return;
           }
-          
-          selectedFiles = valid;
-          document.getElementById('preview-list').textContent = valid.length + ' file(s) selected';
-          document.getElementById('upload-placeholder').style.display = 'none';
-          document.getElementById('upload-preview').style.display = 'block';
+
+          selectedFiles.push(...validFiles);
+          displayPreview();
         }
-        
+
+        function displayPreview() {
+          const grid = document.getElementById('preview-grid');
+          grid.innerHTML = '';
+
+          selectedFiles.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const item = document.createElement('div');
+              item.className = 'preview-item';
+              item.innerHTML = `
+                <img src="${e.target.result}" alt="${file.name}" />
+                <button class="remove" onclick="removeFile(${index})" title="Remove">×</button>
+              `;
+              grid.appendChild(item);
+            };
+            reader.readAsDataURL(file);
+          });
+
+          document.getElementById('upload-count').textContent = '(' + selectedFiles.length + ')';
+          uploadPlaceholder.style.display = 'none';
+          uploadPreview.style.display = 'flex';
+        }
+
+        function removeFile(index) {
+          selectedFiles.splice(index, 1);
+          if (selectedFiles.length === 0) {
+            cancelUpload();
+          } else {
+            displayPreview();
+          }
+        }
+
         function cancelUpload() {
           selectedFiles = [];
-          document.getElementById('file-input').value = '';
-          document.getElementById('upload-placeholder').style.display = 'block';
-          document.getElementById('upload-preview').style.display = 'none';
+          fileInput.value = '';
+          uploadPlaceholder.style.display = 'block';
+          uploadPreview.style.display = 'none';
         }
-        
+
         async function uploadImages() {
           if (selectedFiles.length === 0) return;
-          
-          document.getElementById('upload-preview').style.display = 'none';
-          document.getElementById('upload-progress').style.display = 'block';
-          
-          var uploaded = 0;
-          for (var i = 0; i < selectedFiles.length; i++) {
-            document.getElementById('progress-fill').style.width = ((i / selectedFiles.length) * 100) + '%';
-            document.getElementById('upload-status').textContent = 'Uploading ' + (i + 1) + ' of ' + selectedFiles.length;
+
+          // Show progress
+          uploadPreview.style.display = 'none';
+          uploadProgress.style.display = 'block';
+
+          let uploaded = 0;
+          let failed = 0;
+
+          for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            const progress = ((i / selectedFiles.length) * 100).toFixed(0);
             
-            var formData = new FormData();
-            formData.append('file', selectedFiles[i]);
-            
+            document.getElementById('progress-fill').style.width = progress + '%';
+            document.getElementById('upload-status').textContent = 'Uploading ' + (i + 1) + ' of ' + selectedFiles.length + '...';
+
             try {
-              var res = await fetch('/api/admin/upload', { method: 'POST', body: formData });
-              if (res.ok) uploaded++;
-            } catch (e) { 
-              console.error('Upload error:', e); 
+              const formData = new FormData();
+              formData.append('file', file);
+
+              const response = await fetch('/api/admin/upload', {
+                method: 'POST',
+                body: formData
+              });
+
+              const result = await response.json();
+
+              if (response.ok && result.success) {
+                uploaded++;
+              } else {
+                failed++;
+                console.error('Failed to upload ' + file.name + ':',`, result.error);
+              }
+            } catch (error) {
+              failed++;
+              console.error('Error uploading ' + file.name + ':',`, error);
             }
           }
-          
+
+          // Complete
           document.getElementById('progress-fill').style.width = '100%';
-          document.getElementById('upload-status').textContent = 'Uploaded ' + uploaded + ' of ' + selectedFiles.length + ' images';
-          
+          document.getElementById('upload-status').textContent = '✓ Uploaded ' + uploaded + ' of ' + selectedFiles.length + ' images' + (failed > 0 ? ' (' + failed + ' failed)' : '');
+
+          // Reload data
           await loadImageList();
           await loadStats();
-          
-          setTimeout(function() {
+
+          // Reset after 3 seconds
+          setTimeout(() => {
             cancelUpload();
-            document.getElementById('upload-progress').style.display = 'none';
-            document.getElementById('upload-placeholder').style.display = 'block';
+            uploadProgress.style.display = 'none';
+            uploadPlaceholder.style.display = 'block';
             document.getElementById('progress-fill').style.width = '0%';
-          }, 2000);
+          }, 3000);
         }
       </script>
     </body>
     </html>
   `;
 }
+
+
+

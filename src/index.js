@@ -30,8 +30,31 @@ export default {
       return serveMainPage();
     }
 
-    // Static assets (images, favicon, etc.)
-    return env.ASSETS.fetch(request);
+    // Serve images from R2 if they exist, otherwise fall back to static assets
+    if (url.pathname.startsWith('/images/')) {
+      const filename = url.pathname.substring(1); // Remove leading slash
+      
+      try {
+        const object = await env.IMAGES.get(filename);
+        if (object) {
+          return new Response(object.body, {
+            headers: {
+              'Content-Type': object.httpMetadata?.contentType || 'image/png',
+              'Cache-Control': 'public, max-age=31536000'
+            }
+          });
+        }
+      } catch (e) {
+        console.log('R2 fetch error:', e.message);
+      }
+    }
+    
+    // Fall back to static assets
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+    
+    return new Response('Not Found', { status: 404 });
   },
 };
 
@@ -347,3 +370,4 @@ async function serveMainPage() {
   });
 
 }
+
