@@ -29,3 +29,8 @@ database_id = "f9d232d7-69ed-4e19-8238-9970badd54d6"
 [[kv_namespaces]]
 binding = "IMAGES_CACHE"
 id = "b3a4366fb67e42ccbdeaa92d0f2cb376"
+
+# R2 Bucket for image storage
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "cutetopop-images"

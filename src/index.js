@@ -345,5 +345,5 @@ async function serveMainPage() {
       'Cache-Control': 'public, max-age=300'
     }
   });
-}
 
+}
