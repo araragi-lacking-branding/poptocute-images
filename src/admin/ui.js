@@ -279,7 +279,31 @@ export function generateAdminUI() {
             grid-template-columns: 1fr;
           }
         }
-      </style>
+
+        .upload-section {
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          margin-bottom: 20px;
+        }
+        .upload-area {
+          border: 2px dashed #ddd;
+          border-radius: 8px;
+          padding: 30px;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .upload-area:hover { border-color: #4ecdc4; background: #f9fffe; }
+        .upload-text { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+        .upload-hint { font-size: 13px; color: #999; }
+        #preview-list { margin: 15px 0; font-size: 14px; text-align: left; }
+        .upload-preview { display: flex; flex-direction: column; gap: 15px; align-items: center; }
+        .upload-progress { padding: 20px; }
+        .progress-bar { width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+        .progress-fill { height: 100%; background: #4ecdc4; transition: width 0.3s; width: 0%; }
+        #upload-status { font-size: 14px; color: #666; }      </style>
     </head>
     <body>
       <div class="header">
@@ -317,7 +341,27 @@ export function generateAdminUI() {
           </div>
         </div>
 
-        <div class="tagging-panel" id="tagging-panel">
+        
+        <div class="upload-section">
+          <h2>📤 Upload New Images</h2>
+          <div class="upload-area" id="upload-area">
+            <input type="file" id="file-input" accept="image/*" multiple style="display: none;" />
+            <div class="upload-placeholder" id="upload-placeholder">
+              <p class="upload-text">Tap or click to select images</p>
+              <p class="upload-hint">JPG, PNG, GIF, WEBP • Max 10MB each • Up to 20 files</p>
+            </div>
+            <div class="upload-preview" id="upload-preview" style="display: none;">
+              <div id="preview-list"></div>
+              <button class="btn btn-secondary" onclick="cancelUpload()">Cancel</button>
+              <button class="btn btn-primary" onclick="uploadImages()">Upload</button>
+            </div>
+            <div class="upload-progress" id="upload-progress" style="display: none;">
+              <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+              <p id="upload-status">Uploading...</p>
+            </div>
+          </div>
+        </div>
+<div class="tagging-panel" id="tagging-panel">
           <h2>Tags & Attribution</h2>
           
           <div class="tag-category content">
@@ -575,6 +619,83 @@ export function generateAdminUI() {
           if (bytes < 1024) return bytes + ' B';
           if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
           return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        let selectedFiles = [];
+        const MAX_FILES = 20;
+        
+        document.getElementById('upload-area').addEventListener('click', function() {
+          document.getElementById('file-input').click();
+        });
+        
+        document.getElementById('file-input').addEventListener('change', function(e) {
+          handleFiles(Array.from(e.target.files));
+        });
+        
+        function handleFiles(files) {
+          if (files.length > MAX_FILES) {
+            alert('Maximum 20 files allowed');
+            return;
+          }
+          
+          var valid = files.filter(function(f) {
+            if (!f.type.startsWith('image/')) return false;
+            if (f.size > 10 * 1024 * 1024) return false;
+            return true;
+          });
+          
+          if (valid.length === 0) {
+            alert('No valid images selected');
+            return;
+          }
+          
+          selectedFiles = valid;
+          document.getElementById('preview-list').textContent = valid.length + ' file(s) selected';
+          document.getElementById('upload-placeholder').style.display = 'none';
+          document.getElementById('upload-preview').style.display = 'block';
+        }
+        
+        function cancelUpload() {
+          selectedFiles = [];
+          document.getElementById('file-input').value = '';
+          document.getElementById('upload-placeholder').style.display = 'block';
+          document.getElementById('upload-preview').style.display = 'none';
+        }
+        
+        async function uploadImages() {
+          if (selectedFiles.length === 0) return;
+          
+          document.getElementById('upload-preview').style.display = 'none';
+          document.getElementById('upload-progress').style.display = 'block';
+          
+          var uploaded = 0;
+          for (var i = 0; i < selectedFiles.length; i++) {
+            document.getElementById('progress-fill').style.width = ((i / selectedFiles.length) * 100) + '%';
+            document.getElementById('upload-status').textContent = 'Uploading ' + (i + 1) + ' of ' + selectedFiles.length;
+            
+            var formData = new FormData();
+            formData.append('file', selectedFiles[i]);
+            
+            try {
+              var res = await fetch('/api/admin/upload', { method: 'POST', body: formData });
+              if (res.ok) uploaded++;
+            } catch (e) { 
+              console.error('Upload error:', e); 
+            }
+          }
+          
+          document.getElementById('progress-fill').style.width = '100%';
+          document.getElementById('upload-status').textContent = 'Uploaded ' + uploaded + ' of ' + selectedFiles.length + ' images';
+          
+          await loadImageList();
+          await loadStats();
+          
+          setTimeout(function() {
+            cancelUpload();
+            document.getElementById('upload-progress').style.display = 'none';
+            document.getElementById('upload-placeholder').style.display = 'block';
+            document.getElementById('progress-fill').style.width = '0%';
+          }, 2000);
         }
       </script>
     </body>

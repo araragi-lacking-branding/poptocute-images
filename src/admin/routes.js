@@ -2,6 +2,7 @@
 // Admin API routes and authentication
 
 import { generateAdminUI } from './ui.js';
+import { handleUpload } from './upload.js';
 
 // Handle admin routes
 export async function handleAdminRequest(request, env, url) {
@@ -64,6 +65,10 @@ async function handleAdminAPI(request, env, url) {
       return await updateImageMetadata(request, env, imageId, corsHeaders);
     }
 
+    // POST /api/admin/upload - Upload new image
+    if (path === '/upload' && method === 'POST') {
+      return await handleUpload(request, env);
+    }
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404,
       headers: corsHeaders
