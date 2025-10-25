@@ -1,7 +1,19 @@
+import { handleAdminRequest } from './admin/routes.js';
+
 // src/index.js - Worker with KV caching and smooth image transitions
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Admin routes (will be protected by Cloudflare Access later)
+    if (url.pathname.startsWith('/admin')) {
+      return handleAdminRequest(request, env, url);
+    }
+
+    // Admin API routes
+    if (url.pathname.startsWith('/api/admin/')) {
+      return handleAdminRequest(request, env, url);
+    }
+
 
     // API Routes
     if (url.pathname.startsWith('/api/')) {
@@ -334,3 +346,4 @@ async function serveMainPage() {
     }
   });
 }
+
