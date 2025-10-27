@@ -312,8 +312,6 @@ export function generateAdminUI() {
           <span id="stat-images">Loading...</span>
           <span id="stat-tags">Loading...</span>
           <span id="stat-credits">Loading...</span>
-          <button class="btn btn-primary" onclick="syncDatabase()" id="sync-button" style="margin-left: 20px;">Sync DB</button>
-          <span id="sync-status" style="margin-left: 10px; font-size: 12px;"></span>
         </div>
       </div>
 
@@ -699,42 +697,8 @@ export function generateAdminUI() {
             document.getElementById('progress-fill').style.width = '0%';
           }, 2000);
         }
-        async function syncDatabase() {
-          const button = document.getElementById('sync-button');
-          const status = document.getElementById('sync-status');
-          
-          button.disabled = true;
-          button.textContent = 'Syncing...';
-          status.textContent = 'Working...';
-          
-          try {
-            const response = await fetch('/api/admin/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-              status.textContent = 'Synced ' + result.count + ' images';
-              status.style.color = '#388e3c';
-              await loadStats();
-            } else {
-              status.textContent = 'Failed';
-              status.style.color = '#c62828';
-            }
-          } catch (error) {
-            console.error('Sync error:', error);
-            status.textContent = 'Error';
-            status.style.color = '#c62828';
-          } finally {
-            button.disabled = false;
-            button.textContent = 'Sync DB';
-          }
-        }
       </script>
     </body>
     </html>
   `;
 }
-
