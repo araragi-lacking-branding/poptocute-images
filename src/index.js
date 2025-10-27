@@ -1,7 +1,19 @@
-// src/index.js - Worker with CLS prevention
+import { handleAdminRequest } from './admin/routes.js';
+
+// src/index.js - Worker with KV caching and smooth image transitions
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Admin routes (will be protected by Cloudflare Access later)
+    if (url.pathname.startsWith('/admin')) {
+      return handleAdminRequest(request, env, url);
+    }
+
+    // Admin API routes
+    if (url.pathname.startsWith('/api/admin/')) {
+      return handleAdminRequest(request, env, url);
+    }
+
 
     // API Routes
     if (url.pathname.startsWith('/api/')) {
@@ -18,8 +30,31 @@ export default {
       return serveMainPage();
     }
 
-    // Static assets (images, favicon, etc.)
-    return env.ASSETS.fetch(request);
+    // Serve images from R2 if they exist, otherwise fall back to static assets
+    if (url.pathname.startsWith('/images/')) {
+      const filename = url.pathname.substring(1); // Remove leading slash
+      
+      try {
+        const object = await env.IMAGES.get(filename);
+        if (object) {
+          return new Response(object.body, {
+            headers: {
+              'Content-Type': object.httpMetadata?.contentType || 'image/png',
+              'Cache-Control': 'public, max-age=31536000'
+            }
+          });
+        }
+      } catch (e) {
+        console.log('R2 fetch error:', e.message);
+      }
+    }
+    
+    // Fall back to static assets
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+    
+    return new Response('Not Found', { status: 404 });
   },
 };
 
@@ -235,7 +270,7 @@ async function getStats(env, corsHeaders) {
 }
 
 // ============================================
-// HTML PAGE GENERATION WITH CLS PREVENTION
+// HTML PAGE GENERATION (Simple & Fast)
 // ============================================
 
 async function serveMainPage() {
@@ -261,29 +296,12 @@ async function serveMainPage() {
           box-sizing: border-box;
         }
 
-        /* Container with fixed aspect ratio to prevent CLS */
-        .image-container {
-          width: 100%;
-          max-width: min(90vw, 70vh);
-          aspect-ratio: 1 / 1;
-          position: relative;
-          margin-bottom: 0.75rem;
-          background: #f5f5f5;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 6px 30px rgba(0,0,0,.15);
-        }
-
         #randomImage {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
           max-width: 100%;
-          max-height: 100%;
-          width: auto;
-          height: auto;
-          object-fit: contain;
+          max-height: 70vh;
+          border-radius: 12px;
+          box-shadow: 0 6px 30px rgba(0,0,0,.15);
+          margin-bottom: 0.75rem;
           opacity: 0;
           transition: opacity 0.3s ease-in-out;
         }
@@ -303,12 +321,10 @@ async function serveMainPage() {
       </style>
     </head>
     <body>
-      <div class="image-container">
-        <img id="randomImage" alt="Random image" loading="eager" />
-      </div>
+      <img id="randomImage" alt="Random image" loading="lazy" />
 
       <div class="disclaimer">
-        This website displays images that do not belong to us. We are working on adding proper attribution and reporting features.
+        ※ The images displayed do not belong to this site. We are working on adding accreditation and reporting features.
       </div>
 
       <script>
@@ -328,7 +344,7 @@ async function serveMainPage() {
             const tempImg = new Image();
             tempImg.onload = () => {
               img.src = tempImg.src;
-              img.alt = \`Random image - \${randomImage.split('/').pop()}\`;
+              img.alt = \`Random image — \${randomImage.split('/').pop()}\`;
               // Trigger fade-in after image is loaded
               requestAnimationFrame(() => {
                 img.classList.add('loaded');
@@ -352,4 +368,6 @@ async function serveMainPage() {
       'Cache-Control': 'public, max-age=300'
     }
   });
+
 }
+
