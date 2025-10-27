@@ -4,5 +4,7 @@
   "scripts": {
     "build": "echo 'No build needed'"
   },
-  "devDependencies": {}
+  "dependencies": {
+    "@jsquash/webp": "^1.5.0"
+  }
 }
