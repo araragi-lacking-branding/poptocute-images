@@ -69,6 +69,12 @@ async function handleAdminAPI(request, env, url) {
     if (path === '/upload' && method === 'POST') {
       return await handleUpload(request, env);
     }
+
+    // POST /api/admin/sync-kv - Sync D1 to KV cache
+    if (path === '/sync-kv' && method === 'POST') {
+      return await syncKVCache(env, corsHeaders);
+    }
+
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404,
       headers: corsHeaders
@@ -86,7 +92,7 @@ async function handleAdminAPI(request, env, url) {
 // Get all tags organized by category
 async function getAllTags(env, corsHeaders) {
   const results = await env.DB.prepare(`
-    SELECT 
+    SELECT
       t.id,
       t.name,
       t.display_name,
@@ -149,11 +155,11 @@ async function createTag(request, env, corsHeaders) {
     categoryResult.id
   ).run();
 
-  return new Response(JSON.stringify({ 
-    success: true, 
-    id: result.meta.last_row_id 
-  }), { 
-    headers: corsHeaders 
+  return new Response(JSON.stringify({
+    success: true,
+    id: result.meta.last_row_id
+  }), {
+    headers: corsHeaders
   });
 }
 
@@ -161,7 +167,7 @@ async function createTag(request, env, corsHeaders) {
 async function getImageDetails(env, imageId, corsHeaders) {
   // Get image data
   const image = await env.DB.prepare(`
-    SELECT 
+    SELECT
       i.*,
       c.name as credit_name,
       c.url as credit_url,
@@ -182,7 +188,7 @@ async function getImageDetails(env, imageId, corsHeaders) {
 
   // Get tags for this image
   const tags = await env.DB.prepare(`
-    SELECT 
+    SELECT
       t.id,
       t.name,
       t.display_name,
@@ -197,8 +203,8 @@ async function getImageDetails(env, imageId, corsHeaders) {
   return new Response(JSON.stringify({
     ...image,
     tags: tags.results
-  }), { 
-    headers: corsHeaders 
+  }), {
+    headers: corsHeaders
   });
 }
 
@@ -212,7 +218,7 @@ async function updateImageMetadata(request, env, imageId, corsHeaders) {
     if (credit && credit.name) {
       // Check if credit already exists
       const existingCredit = await env.DB.prepare(`
-        SELECT id FROM credits 
+        SELECT id FROM credits
         WHERE name = ? AND url = ?
       `).bind(credit.name, credit.url || null).first();
 
@@ -235,7 +241,7 @@ async function updateImageMetadata(request, env, imageId, corsHeaders) {
 
       // Update image with credit
       await env.DB.prepare(`
-        UPDATE images 
+        UPDATE images
         SET credit_id = ?, updated_at = datetime('now')
         WHERE id = ?
       `).bind(creditId, imageId).run();
@@ -264,12 +270,46 @@ async function updateImageMetadata(request, env, imageId, corsHeaders) {
 
   } catch (error) {
     console.error('Error updating metadata:', error);
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       error: 'Failed to update metadata',
-      details: error.message 
+      details: error.message
     }), {
       status: 500,
       headers: corsHeaders
+    });
+  }
+}
+
+// Sync images list from D1 to KV cache
+async function syncKVCache(env, corsHeaders) {
+  try {
+    // Query D1 for all active images
+    const results = await env.DB.prepare(`
+      SELECT filename FROM images WHERE status = 'active'
+    `).all();
+    
+    const filenames = results.results.map(r => r.filename);
+    
+    // Write to KV
+    await env.IMAGES_CACHE.put('images-list', JSON.stringify(filenames), {
+      expirationTtl: 86400 // 24 hours
+    });
+    
+    return new Response(JSON.stringify({
+      success: true,
+      count: filenames.length,
+      message: `Successfully synced ${filenames.length} images to KV cache`
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error('KV sync error:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }
