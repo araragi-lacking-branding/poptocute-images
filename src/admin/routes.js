@@ -2,6 +2,7 @@
 // Admin API routes and authentication
 
 import { generateAdminUI } from './ui.js';
+import { handleSync } from './sync.js';
 import { handleUpload } from './upload.js';
 
 // Handle admin routes
@@ -68,6 +69,10 @@ async function handleAdminAPI(request, env, url) {
     // POST /api/admin/upload - Upload new image
     if (path === '/upload' && method === 'POST') {
       return await handleUpload(request, env);
+    }
+    // POST /api/admin/sync - Sync D1 to KV
+    if (path === '/sync' && method === 'POST') {
+      return handleSync(env);
     }
 
     // POST /api/admin/sync-kv - Sync D1 to KV cache
@@ -313,3 +318,5 @@ async function syncKVCache(env, corsHeaders) {
     });
   }
 }
+
+
