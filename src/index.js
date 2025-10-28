@@ -31,9 +31,24 @@ export default {
     }
 
     // Serve images from R2
-    // DO NOT handle /cdn-cgi/image/ paths - let Cloudflare handle those by fetching from /images/
-    if (url.pathname.startsWith('/images/')) {
-      const filename = url.pathname.substring(1); // Remove leading slash: "images/abc.png"
+    // For WebP, users/browsers should request via /cdn-cgi/image/ path directly
+    if (url.pathname.startsWith('/images/') || url.pathname.includes('/cdn-cgi/image/')) {
+      // Extract actual image path
+      let filename;
+      
+      if (url.pathname.includes('/cdn-cgi/image/')) {
+        // Path like: /cdn-cgi/image/format=webp/images/abc.png
+        // Extract: images/abc.png
+        const match = url.pathname.match(/\/images\/.+$/);
+        if (match) {
+          filename = match[0].substring(1); // Remove leading slash
+        } else {
+          return new Response('Invalid cdn-cgi path', { status: 400 });
+        }
+      } else {
+        // Regular path: /images/abc.png
+        filename = url.pathname.substring(1); // Remove leading slash
+      }
       
       try {
         const object = await env.IMAGES.get(filename);
