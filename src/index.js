@@ -1,6 +1,6 @@
 import { handleAdminRequest } from './admin/routes.js';
 
-// src/index.js - Worker with KV caching and CLS prevention
+// src/index.js - Worker with WebP transformations via cdn-cgi path
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -30,31 +30,38 @@ export default {
       return serveMainPage();
     }
 
-       // Serve images from R2 with automatic WebP conversion
+    // Serve images from R2 with WebP transformation
     if (url.pathname.startsWith('/images/')) {
-      const filename = url.pathname.substring(1); // Remove leading slash
+      // Rewrite to use cdn-cgi transformation path
+      const transformedUrl = new URL(request.url);
+      transformedUrl.pathname = `/cdn-cgi/image/format=webp,quality=85${url.pathname}`;
       
-      try {
-        const object = await env.IMAGES.get(filename);
-        if (object) {
-          // Use Cloudflare's Image Resizing to convert to WebP automatically
-          // This works in production (not local dev)
-          return new Response(object.body, {
-            headers: {
-              'Content-Type': object.httpMetadata?.contentType || 'image/png',
-              'Cache-Control': 'public, max-age=31536000',
-              'Vary': 'Accept'
-            },
-            cf: {
-              image: {
-                format: 'webp',
-                quality: 85
+      // Fetch the transformed image
+      return fetch(transformedUrl.toString(), {
+        headers: request.headers
+      });
+    }
+    
+    // Handle cdn-cgi transformation requests - serve actual image from R2
+    if (url.pathname.startsWith('/cdn-cgi/image/')) {
+      // Extract the actual image path
+      const match = url.pathname.match(/\/cdn-cgi\/image\/[^\/]+(\/.+)/);
+      if (match) {
+        const imagePath = match[1].substring(1); // Remove leading slash
+        
+        try {
+          const object = await env.IMAGES.get(imagePath);
+          if (object) {
+            return new Response(object.body, {
+              headers: {
+                'Content-Type': object.httpMetadata?.contentType || 'image/png',
+                'Cache-Control': 'public, max-age=31536000'
               }
-            }
-          });
+            });
+          }
+        } catch (e) {
+          console.log('R2 fetch error:', e.message);
         }
-      } catch (e) {
-        console.log('R2 fetch error:', e.message);
       }
     }
     
