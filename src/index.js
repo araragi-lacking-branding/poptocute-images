@@ -70,6 +70,13 @@ export default {
     }
     
     // Fall back to static assets
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+    
+    return new Response('Not Found', { status: 404 });
+  },
+};
 
 // ============================================
 // FAST IMAGES LIST FROM KV
