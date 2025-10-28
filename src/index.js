@@ -1,11 +1,11 @@
 import { handleAdminRequest } from './admin/routes.js';
 
-// src/index.js - Worker with WebP transformations via cdn-cgi path
+// src/index.js - Worker with Image Transformations via fetch
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     
-    // Admin routes (will be protected by Cloudflare Access later)
+    // Admin routes
     if (url.pathname.startsWith('/admin')) {
       return handleAdminRequest(request, env, url);
     }
@@ -20,67 +20,63 @@ export default {
       return handleAPI(request, env, url);
     }
 
-    // Dynamic images.json generation (from KV - fast!)
+    // Dynamic images.json generation
     if (url.pathname === '/images.json') {
       return getImagesList(env);
     }
 
-    // Root path - serve simple static-like HTML
+    // Root path
     if (url.pathname === '/') {
       return serveMainPage();
     }
 
-    // Serve images from R2 with WebP transformation
-    if (url.pathname.startsWith('/images/')) {
-      // Rewrite to use cdn-cgi transformation path
-      const transformedUrl = new URL(request.url);
-      transformedUrl.pathname = `/cdn-cgi/image/format=webp,quality=85${url.pathname}`;
+    // Serve images from R2
+    // For WebP, users/browsers should request via /cdn-cgi/image/ path directly
+    if (url.pathname.startsWith('/images/') || url.pathname.includes('/cdn-cgi/image/')) {
+      // Extract actual image path
+      let filename;
       
-      // Fetch the transformed image
-      return fetch(transformedUrl.toString(), {
-        headers: request.headers
-      });
-    }
-    
-    // Handle cdn-cgi transformation requests - serve actual image from R2
-    if (url.pathname.startsWith('/cdn-cgi/image/')) {
-      // Extract the actual image path
-      const match = url.pathname.match(/\/cdn-cgi\/image\/[^\/]+(\/.+)/);
-      if (match) {
-        const imagePath = match[1].substring(1); // Remove leading slash
-        
-        try {
-          const object = await env.IMAGES.get(imagePath);
-          if (object) {
-            return new Response(object.body, {
-              headers: {
-                'Content-Type': object.httpMetadata?.contentType || 'image/png',
-                'Cache-Control': 'public, max-age=31536000'
-              }
-            });
-          }
-        } catch (e) {
-          console.log('R2 fetch error:', e.message);
+      if (url.pathname.includes('/cdn-cgi/image/')) {
+        // Path like: /cdn-cgi/image/format=webp/images/abc.png
+        // Extract: images/abc.png
+        const match = url.pathname.match(/\/images\/.+$/);
+        if (match) {
+          filename = match[0].substring(1); // Remove leading slash
+        } else {
+          return new Response('Invalid cdn-cgi path', { status: 400 });
         }
+      } else {
+        // Regular path: /images/abc.png
+        filename = url.pathname.substring(1); // Remove leading slash
+      }
+      
+      try {
+        const object = await env.IMAGES.get(filename);
+        if (!object) {
+          return new Response('Image not found', { status: 404 });
+        }
+        
+        return new Response(object.body, {
+          headers: {
+            'Content-Type': object.httpMetadata?.contentType || 'image/png',
+            'Cache-Control': 'public, max-age=31536000'
+          }
+        });
+        
+      } catch (error) {
+        console.error('Image serve error:', error);
+        return new Response('Error: ' + error.message, { status: 500 });
       }
     }
     
     // Fall back to static assets
-    if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
-    }
-    
-    return new Response('Not Found', { status: 404 });
-  },
-};
 
 // ============================================
-// FAST IMAGES LIST FROM KV (< 50ms globally)
+// FAST IMAGES LIST FROM KV
 // ============================================
 
 async function getImagesList(env) {
   try {
-    // Try to get from KV first (fast!)
     const cached = await env.IMAGES_CACHE.get('images-list', 'json');
     
     if (cached && Array.isArray(cached)) {
@@ -93,7 +89,6 @@ async function getImagesList(env) {
       });
     }
     
-    // Fallback: Query D1 if KV is empty (shouldn't happen in production)
     console.log('KV cache miss - falling back to D1');
     const results = await env.DB.prepare(`
       SELECT filename FROM images WHERE status = 'active'
@@ -101,9 +96,8 @@ async function getImagesList(env) {
 
     const filenames = results.results.map(r => r.filename);
     
-    // Store in KV for next time (fire and forget)
     env.IMAGES_CACHE.put('images-list', JSON.stringify(filenames), {
-      expirationTtl: 86400 // 24 hours
+      expirationTtl: 86400
     });
 
     return new Response(JSON.stringify(filenames), {
@@ -132,14 +126,12 @@ async function getImagesList(env) {
 async function handleAPI(request, env, url) {
   const path = url.pathname.replace('/api', '');
   
-  // CORS headers for API requests
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  // Handle OPTIONS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -170,7 +162,6 @@ async function handleAPI(request, env, url) {
   }
 }
 
-// Get random active image with metadata
 async function getRandomImage(env, corsHeaders) {
   try {
     const result = await env.DB.prepare(`
@@ -200,7 +191,6 @@ async function getRandomImage(env, corsHeaders) {
       });
     }
 
-    // Get tags for this image
     const tags = await env.DB.prepare(`
       SELECT t.name, t.display_name, tc.name as category
       FROM image_tags it
@@ -222,7 +212,6 @@ async function getRandomImage(env, corsHeaders) {
   }
 }
 
-// Get list of images with optional filters
 async function getImages(env, params, corsHeaders) {
   const limit = Math.min(parseInt(params.get('limit') || '20'), 100);
   const offset = parseInt(params.get('offset') || '0');
@@ -257,7 +246,6 @@ async function getImages(env, params, corsHeaders) {
   }
 }
 
-// Get database statistics
 async function getStats(env, corsHeaders) {
   try {
     const imageCount = await env.DB.prepare(
@@ -286,7 +274,7 @@ async function getStats(env, corsHeaders) {
 }
 
 // ============================================
-// HTML PAGE WITH CLS PREVENTION
+// HTML PAGE
 // ============================================
 
 async function serveMainPage() {
@@ -312,7 +300,6 @@ async function serveMainPage() {
           box-sizing: border-box;
         }
 
-        /* Container with fixed aspect ratio to prevent CLS */
         .image-container {
           width: 100%;
           max-width: min(90vw, 70vh);
@@ -375,12 +362,10 @@ async function serveMainPage() {
             const randomImage = images[Math.floor(Math.random() * images.length)];
             const img = document.getElementById('randomImage');
             
-            // Preload image before showing
             const tempImg = new Image();
             tempImg.onload = () => {
               img.src = tempImg.src;
               img.alt = 'Random image - ' + randomImage.split('/').pop();
-              // Trigger fade-in after image is loaded
               requestAnimationFrame(() => {
                 img.classList.add('loaded');
               });
