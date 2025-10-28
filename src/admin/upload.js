@@ -1,7 +1,6 @@
 // src/admin/upload.js
-// Handle image uploads to R2 with WebP conversion, validation and abuse prevention
-
-import { convertToWebP, getImageDimensions, calculateSavings } from './image-converter.js';
+// Handle image uploads to R2 with validation and deduplication
+// WebP conversion happens on serve via Cloudflare Image Resizing API
 
 export async function handleUpload(request, env) {
   try {
@@ -16,7 +15,7 @@ export async function handleUpload(request, env) {
     }
 
     // Validation: File size (max 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       return new Response(JSON.stringify({ 
         error: 'File too large. Maximum size is 10MB' 
@@ -37,19 +36,19 @@ export async function handleUpload(request, env) {
       });
     }
 
-    // Get original file data
-    const originalBuffer = await file.arrayBuffer();
-    const originalSize = originalBuffer.byteLength;
+    // Get file data
+    const buffer = await file.arrayBuffer();
+    const fileSize = buffer.byteLength;
 
-    console.log(`Processing upload: ${file.name} (${originalSize} bytes, ${file.type})`);
+    console.log(`Processing upload: ${file.name} (${fileSize} bytes, ${file.type})`);
 
     // Generate content hash for deduplication
-    const hashBuffer = await crypto.subtle.digest('SHA-256', originalBuffer);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     const shortHash = hashHex.substring(0, 16);
 
-    // Check for duplicate by hash
+    // Check for duplicate
     const existing = await env.DB.prepare(`
       SELECT id, filename FROM images WHERE file_hash = ?
     `).bind(hashHex).first();
@@ -65,48 +64,24 @@ export async function handleUpload(request, env) {
       });
     }
 
-    // Get image dimensions before conversion
-    const dimensions = await getImageDimensions(originalBuffer);
+    // Get image dimensions from file headers
+    const dimensions = getImageDimensionsSync(buffer);
 
-    // Convert to WebP (unless already WebP)
-    let finalBuffer = originalBuffer;
-    let finalMimeType = file.type;
-    let finalSize = originalSize;
-    let savings = 0;
-    let conversionApplied = false;
-
-    if (file.type !== 'image/webp' && file.type !== 'image/avif') {
-      console.log('Converting to WebP...');
-      try {
-        const webpBuffer = await convertToWebP(originalBuffer, 85); // 85% quality
-        finalBuffer = webpBuffer;
-        finalSize = webpBuffer.byteLength;
-        finalMimeType = 'image/webp';
-        savings = calculateSavings(originalSize, finalSize);
-        conversionApplied = true;
-        console.log(`WebP conversion complete: ${finalSize} bytes (${savings}% smaller)`);
-      } catch (conversionError) {
-        console.error('WebP conversion failed, using original:', conversionError.message);
-        // Fall back to original if conversion fails
-        conversionApplied = false;
-      }
-    }
-
-    // Generate filename: images/[hash].[ext]
-    const extension = conversionApplied ? 'webp' : file.name.split('.').pop().toLowerCase();
-    const filename = `images/${shortHash}.${extension}`;
+    // Generate filename with hash and original extension
+    const ext = file.name.split('.').pop().toLowerCase();
+    const filename = `images/${shortHash}.${ext}`;
 
     // Upload to R2
-    await env.IMAGES.put(filename, finalBuffer, {
+    await env.IMAGES.put(filename, buffer, {
       httpMetadata: {
-        contentType: finalMimeType,
+        contentType: file.type,
         cacheControl: 'public, max-age=31536000'
       },
     });
 
     console.log(`Uploaded to R2: ${filename}`);
 
-    // Add to D1 database
+    // Save to database
     const result = await env.DB.prepare(`
       INSERT INTO images (
         filename, 
@@ -124,32 +99,22 @@ export async function handleUpload(request, env) {
     `).bind(
       filename,
       file.name,
-      finalSize,
+      fileSize,
       dimensions.width,
       dimensions.height,
-      finalMimeType,
+      file.type,
       hashHex
     ).run();
 
     console.log(`Saved to database: ID ${result.meta.last_row_id}`);
 
-    // Build response message
-    let message = 'Image uploaded successfully';
-    if (conversionApplied) {
-      message = `Image uploaded and converted to WebP (${savings}% size reduction)`;
-    }
-
     return new Response(JSON.stringify({ 
       success: true,
       id: result.meta.last_row_id,
       filename: filename,
-      original_size: originalSize,
-      final_size: finalSize,
-      size: finalSize, // backwards compatibility
-      savings_percent: savings,
+      size: fileSize,
       dimensions: dimensions,
-      converted: conversionApplied,
-      message: message
+      message: 'Image uploaded successfully. WebP conversion on serve via Cloudflare.'
     }), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -163,5 +128,58 @@ export async function handleUpload(request, env) {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
+  }
+}
+
+/**
+ * Get image dimensions by parsing file headers
+ * Simple synchronous function - no external dependencies
+ */
+function getImageDimensionsSync(buffer) {
+  try {
+    const view = new DataView(buffer);
+    
+    // PNG (starts with 0x89504E47)
+    if (view.getUint32(0, false) === 0x89504E47) {
+      return {
+        width: view.getUint32(16, false),
+        height: view.getUint32(20, false)
+      };
+    }
+    
+    // JPEG (starts with 0xFFD8)
+    if (view.getUint16(0, false) === 0xFFD8) {
+      let offset = 2;
+      while (offset < view.byteLength - 8) {
+        if (view.getUint8(offset) !== 0xFF) break;
+        const marker = view.getUint8(offset + 1);
+        const size = view.getUint16(offset + 2, false);
+        
+        // SOF markers
+        if (marker >= 0xC0 && marker <= 0xCF && 
+            marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+          return {
+            height: view.getUint16(offset + 5, false),
+            width: view.getUint16(offset + 7, false)
+          };
+        }
+        offset += 2 + size;
+      }
+    }
+    
+    // GIF (starts with GIF87a or GIF89a)
+    const gifHeader = new Uint8Array(buffer, 0, 6);
+    const gifString = String.fromCharCode(...gifHeader);
+    if (gifString.startsWith('GIF')) {
+      return {
+        width: view.getUint16(6, true),
+        height: view.getUint16(8, true)
+      };
+    }
+    
+    return { width: 0, height: 0 };
+  } catch (e) {
+    console.error('Dimension detection error:', e);
+    return { width: 0, height: 0 };
   }
 }
