@@ -3,9 +3,5 @@
   "version": "1.1.0",
   "scripts": {
     "build": "echo 'No build needed'"
-  },
-  "dependencies": {
-    "@jsquash/png": "^3.1.1",
-    "@jsquash/webp": "^1.5.0"
   }
 }

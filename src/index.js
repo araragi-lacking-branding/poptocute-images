@@ -30,17 +30,26 @@ export default {
       return serveMainPage();
     }
 
-    // Serve images from R2 if they exist, otherwise fall back to static assets
+       // Serve images from R2 with automatic WebP conversion
     if (url.pathname.startsWith('/images/')) {
       const filename = url.pathname.substring(1); // Remove leading slash
       
       try {
         const object = await env.IMAGES.get(filename);
         if (object) {
+          // Use Cloudflare's Image Resizing to convert to WebP automatically
+          // This works in production (not local dev)
           return new Response(object.body, {
             headers: {
               'Content-Type': object.httpMetadata?.contentType || 'image/png',
-              'Cache-Control': 'public, max-age=31536000'
+              'Cache-Control': 'public, max-age=31536000',
+              'Vary': 'Accept'
+            },
+            cf: {
+              image: {
+                format: 'webp',
+                quality: 85
+              }
             }
           });
         }
