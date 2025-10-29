@@ -39,37 +39,42 @@ However, I do intend this to be a critique, in the formal sense. Taking a hypoth
 
 # *cute* and *pop*
 
-A random image display site with metadata management, tagging, and attribution system powered by Cloudflare Workers, D1, R2, and tied to the repo.
+A random image display site with metadata management, tagging, and attribution system powered by Cloudflare Workers, D1, R2, KV, and GitHub.
 
 ## Architecture
 
-- **Images**: Stored in GitHub (`public/images/`)
+- **Images**: Stored in Cloudflare R2 (hash-based names) with backup in GitHub (`public/images/`)
+- **Cache**: Cloudflare KV for fast global image list access
 - **Metadata**: Cloudflare D1 database (tags, credits, status)
-- **Worker**: Cloudflare Workers (API + HTML serving)
-- **Deployment**: Cloudflare Pages (GitHub integration)
+- **Image Transforms**: Cloudflare Image Resizing via `/cdn-cgi/image/` for WebP conversion
+- **Worker**: Cloudflare Workers (API + HTML serving + Admin UI)
+- **Deployment**: Cloudflare Pages with GitHub integration
 
 ## Current Status
 
 ✅ **Phase 1: Complete**
-- 187 images in database
-- Random image display working
-- D1 database with full schema
-- Worker serving from database
+- 187 images migrated to R2 storage
+- Random image display working with KV caching
+- D1 database with full schema (6 tables, 4 views)
+- Worker serving from R2 with CDN optimization
+- WebP transformation via Cloudflare native handling
 
-🚧 **Phase 2: In Progress** (Next: ~150 images)
-- Tag system ready (4 categories: content, character, creator, source)
-- Credit attribution system in place
-- Ready for metadata curation
+✅ **Phase 2: Complete**
+- Tag system implemented (4 categories: content, character, creator, source)
+- Credit attribution system active
+- Admin UI fully functional at `/admin`
+- Image upload with R2 integration
+- KV sync capability for cache refresh
 
-📋 **Phase 3: Planned** (~300 images)
-- Admin UI for tagging and crediting
-- Bulk metadata operations
-- Tag management interface
+🚧 **Phase 3: In Progress**
+- Metadata curation for existing images
+- Tag management and bulk operations
+- Frontend attribution display enhancement
 
 🌐 **Phase 4: Future** (Long-term)
 - Public submission system
 - User feedback and contributions
-- Moderation workflow
+- Advanced moderation workflow
 
 ## Database Schema
 
@@ -89,12 +94,14 @@ A random image display site with metadata management, tagging, and attribution s
 
 ## API Endpoints
 
-### `GET /api/random`
+### Public API
+
+#### `GET /api/random`
 Get a random active image with metadata
 ```json
 {
   "id": 1,
-  "filename": "images/IMG_1234.jpg",
+  "filename": "images/abc123def456.png",
   "alt_text": "Cute cat",
   "credit_name": "Artist Name",
   "credit_url": "https://...",
@@ -105,10 +112,10 @@ Get a random active image with metadata
 }
 ```
 
-### `GET /api/images?limit=20&offset=0`
+#### `GET /api/images?limit=20&offset=0`
 List images with pagination
 
-### `GET /api/stats`
+#### `GET /api/stats`
 Get database statistics
 ```json
 {
@@ -117,6 +124,23 @@ Get database statistics
   "credited_artists": 0
 }
 ```
+
+#### `GET /images.json`
+Dynamically generated list of all active images (cached in KV)
+
+### Admin API
+
+#### `GET /admin`
+Admin dashboard UI with image management interface
+
+#### `POST /api/admin/upload`
+Upload new image to R2 with automatic database insertion
+
+#### `POST /api/admin/sync`
+Sync D1 database to KV cache for performance optimization
+
+#### `GET /api/admin/images`
+Admin-only image listing with management capabilities
 
 ## Local Development
 
@@ -167,27 +191,48 @@ Automatic via Cloudflare Pages:
 ```
 poptocute-images/
 ├── public/
-│   ├── images/          # 187 image files
-│   ├── index.html       # (Legacy, not used)
+│   ├── images/          # 187 image files (backup, served from R2)
 │   └── favicon.ico
 ├── src/
-│   └── index.js         # Worker code (D1-powered)
+│   ├── index.js         # Main Worker (routing, API, image serving)
+│   └── admin/
+│       ├── routes.js    # Admin API endpoints
+│       ├── ui.js        # Admin dashboard UI
+│       ├── upload.js    # R2 upload handling
+│       └── sync.js      # KV sync functionality
 ├── scripts/
-│   └── migrate-images.js # Database migration
-├── schema.sql           # Database schema
-├── wrangler.toml        # Worker configuration
+│   ├── sync-kv.js       # Active: D1 to KV sync utility
+│   └── archive/
+│       ├── migration/   # Historical migration scripts
+│       │   ├── migrate-images.js
+│       │   ├── migrate-to-r2.js
+│       │   └── upload-to-r2-remote.js
+│       └── verification/ # Post-migration audit scripts
+│           ├── audit-r2.js
+│           ├── check-db-vs-r2.js
+│           ├── test-upload.js
+│           ├── verify-only.js
+│           └── verify-r2.js
+├── schema.sql           # D1 database schema
+├── wrangler.toml        # Worker config (D1, R2, KV bindings)
 ├── package.json
 └── README.md
 ```
 
 ## Adding New Images
 
-1. Add image files to `public/images/`
-2. Run migration script:
-   ```bash
-   node scripts/migrate-images.js
-   ```
-3. Commit and push to GitHub
+### Via Admin UI (Recommended)
+1. Navigate to `/admin` on your deployed site
+2. Use the upload interface to add images
+3. Images are automatically uploaded to R2 and added to D1 database
+
+### Via Script (Bulk Operations)
+1. Add image files to `public/images/` (for backup)
+2. Use archived migration scripts in `scripts/archive/migration/` if needed
+3. Sync KV cache: `node scripts/sync-kv.js`
+4. Commit and push to GitHub
+
+**Note:** The migration to R2 is complete. New images should primarily be added via the admin UI.
 
 ## Maintenance Tasks
 
@@ -222,18 +267,26 @@ UPDATE images SET credit_id = 2 WHERE id = 1;
 
 ### Images not displaying
 - Check database: `SELECT COUNT(*) FROM images WHERE status='active'`
-- Verify image files exist in `public/images/`
+- Verify images exist in R2 bucket (Cloudflare Dashboard → R2)
+- Check KV cache: Sync using `/api/admin/sync` or `node scripts/sync-kv.js`
 - Check browser console for errors
+- Verify R2 binding in `wrangler.toml`
 
 ### Database connection issues
 - Verify `wrangler.toml` has correct database_id
 - Run `wrangler login` to refresh authentication
-- Check Cloudflare dashboard for database status
+- Check Cloudflare dashboard for D1 database status
+
+### KV cache out of sync
+- Use admin panel: Navigate to `/admin` and click "Sync KV Cache"
+- Or run: `node scripts/sync-kv.js`
+- Verify KV namespace binding in `wrangler.toml`
 
 ### Build fails
 - Check observability logs in Cloudflare dashboard
 - Verify wrangler.toml syntax
-- Ensure D1 binding is configured
+- Ensure all bindings are configured (D1, R2, KV)
+- Check that R2 bucket exists and is accessible
 
 ## Contributing
 
@@ -243,8 +296,25 @@ Currently admin-only. Public contribution system planned for Phase 4.
 
 Images may have various licenses. Working on proper attribution system.
 
+## Performance
+
+- **R2 Storage**: Images served from Cloudflare's edge network
+- **KV Caching**: Image list cached globally for <50ms load times
+- **WebP Optimization**: Automatic format conversion via Cloudflare Image Resizing
+- **CDN**: Full Cloudflare CDN integration with aggressive caching
+
 ## Links
 
-- **Live Site**: [Your Cloudflare Pages URL]
+- **Live Site**: https://cutetopop.com
 - **GitHub**: https://github.com/araragi-lacking-branding/poptocute-images
 - **Cloudflare Dashboard**: https://dash.cloudflare.com
+
+## Project History
+
+- **Initial build**: Static site with local images
+- **Phase 1**: Migration to Cloudflare Workers + D1 database
+- **Phase 2**: R2 migration for image storage, KV caching implementation
+- **Phase 3**: Admin panel development, upload functionality
+- **Recent**: WebP optimization, repository cleanup (archived obsolete migration scripts)
+
+All development tracked in git history. Migration scripts preserved in `scripts/archive/` for reference.
