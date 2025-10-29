@@ -2,15 +2,17 @@
 **it's all pretty sily, so bear with me. You'll see where the robot starts talking.**
 
 The "simple" goal of this project is to build a site reminiscent of 2000s internet - niche, singular if broad focus, and minimal visual clutter.
-Like many of the folks I grew up with then, it'll be strung together with spaghetti code and other people's work, based on suggestions from large groups of people on the internet.
+Like many of the folks I grew up with then, it'll be strung together with spaghetti code and other people's work, based on suggestions from large groups of people on the internet. <br></br>
 The main difference is it'll be explored by telling a large language model to build and review things without much oversight.
-Mostly this is to learn through doing (in a very, very specific sense) while creating a personal critique. Specifically, beyond the tech side, it was terribly easy to get a free tool running using other people's work.
+Mostly this is to learn through doing (in a very, very specific sense) while creating a personal critique. Specifically, beyond the tech side, it was terribly easy to get a free tool running using other people's work. **Statements on ethics, intent, and similar are below and hopefully obviously human written.**
+<br></br>
 So that's all this is - can I build something almost solely with AI that provides its own critique and measures for both technical and artistic integrity.
+- See it live - if it's working: https://cutetopop.com
 
 # *Why?*
 I'm a compliance and risk person in the healthcare space. A large part of me has been terrified to see AI entering those spaces with minimal client review on major service providers.
-I'm not a developer. I'm not an engineer in any way. As said, tech and compliance has been the majority of my career, though predominantly in front facing technical work and analysis.
-Almost none of this project will consist of personal original code and will be put up with minimal dedicated review. It could be great. It could burn horribly. I'd like to see what happens.
+I'm not a developer. I'm not an engineer in any way. As said, tech and compliance has been the majority of my career, though predominantly in front facing technical work and analysis. <br></br>
+Almost none of this project will consist of personal original code and will be put up with minimal dedicated review. It could be great. It could burn horribly. I'd like to see what happens. <br></br>
 I'm not attempting to be maliciously critcal of the technology being used here - I, honestly, thank it's amazing work. It's just very easy to be misued and misunderstood, and I'd like to learn and demonstrate more on that.
 However, I do intend this to be a critique, in the formal sense. Taking a hypothesis on a topic, researching it, testing it, and comparing against other models, works, and theoretics to build a better understanding.
 
@@ -20,7 +22,7 @@ However, I do intend this to be a critique, in the formal sense. Taking a hypoth
 - *if you would like an image taken down, email the project at lambda@cutetopop.com*. you don't have to be the owner, provide any proof, or anything else. Just send the filename (most should be the hash of the file) and it will be gone as soon as possible.
 - the only exception to the above would be for volunteered art to the project (unless revoked by the artist, obviously), licensed stock images, or similar. Even then, any good faith message would be taken incredibly serious, and I'd like to remove the work if any claim of ownership or attribution was in quest.
 
-# funding, cost, and use disclosures / ethics
+# *funding, cost, and use disclosures / ethics*
 - There is absolutely no outside money coming into this project. There are no ads or monetization. There is absolutely no plan to add anything like that. Minimizing tracking is also crucial.
 - Observability via Cloudflare is turned on. We may explore site tags, SEO, and such in the future, but that's not a goal now, and should never be used for monetization on this site.
 - If that changes, it will be disclosed immediately. It is against the ethos of the project however, and the site concept is purposefully pretty meaningless in the modern internet to avoid abuse.
@@ -29,11 +31,11 @@ However, I do intend this to be a critique, in the formal sense. Taking a hypoth
 - For AI usage, Claude from Anthropic is currently in use. Prior to GitHub, I coded the original image services as a local test, then asked ChatGPT to rebuild it entirely. Then it went up here. I don't see much of my code there, so let's say it's all AI at this point besides a couple manual fixes.
 - The email for the site is hosted via Proton, though this was not specific to this project. 
 
-# if you'd like to contribute, question, or request anything, please email the site at lambda@cutetopop.com . 
+# if you'd like to contribute, question, or request anything, please email the site at lambda@cutetopop.com . <br></br> *And now, here's what the LLM says we're doing:*
 
 
 
-# *And now, here's what the LLM says we're doing:*
+
 
 # *cute* and *pop*
 
