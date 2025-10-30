@@ -157,7 +157,7 @@ async function handleAPI(request, env, url) {
 async function getRandomImage(env, corsHeaders) {
   try {
     const result = await env.DB.prepare(`
-      SELECT 
+      SELECT
         i.id,
         i.filename,
         i.alt_text,
@@ -168,6 +168,8 @@ async function getRandomImage(env, corsHeaders) {
         i.created_at,
         c.name AS credit_name,
         c.url AS credit_url,
+        c.social_handle AS credit_social_handle,
+        c.platform AS credit_platform,
         c.license AS credit_license
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
@@ -563,6 +565,72 @@ async function serveMainPage() {
           text-decoration: underline;
         }
 
+        /* Artist Credit Display */
+        .artist-credit {
+          text-align: center;
+          margin: 1rem auto 0.5rem;
+          max-width: 600px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .artist-credit-label {
+          font-size: 0.75rem;
+          color: #888;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-bottom: 0.25rem;
+        }
+
+        .artist-credit-name {
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #333;
+          margin-bottom: 0.25rem;
+        }
+
+        .artist-credit-name a {
+          color: #333;
+          text-decoration: none;
+          transition: color 0.2s ease;
+        }
+
+        .artist-credit-name a:hover {
+          color: #4ecdc4;
+        }
+
+        .artist-credit-social {
+          font-size: 0.9rem;
+          color: #666;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.35rem;
+        }
+
+        .artist-credit-social a {
+          color: #4ecdc4;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          transition: color 0.2s ease;
+        }
+
+        .artist-credit-social a:hover {
+          color: #3ab5ac;
+          text-decoration: underline;
+        }
+
+        .artist-credit-social::before {
+          content: '→';
+          font-size: 0.9rem;
+          color: #999;
+        }
+
+        .artist-credit.hidden {
+          display: none;
+        }
+
         .disclaimer {
           font-size: 0.9rem;
           color: #444;
@@ -653,6 +721,12 @@ async function serveMainPage() {
         </div>
         <div id="metadataContent"></div>
       </aside>
+
+      <div class="artist-credit hidden" id="artistCredit">
+        <div class="artist-credit-label">Artist</div>
+        <div class="artist-credit-name" id="artistName"></div>
+        <div class="artist-credit-social" id="artistSocial"></div>
+      </div>
 
       <div class="disclaimer">
         This website displays images that do not belong to us. We are working on adding proper attribution and reporting features.
@@ -836,6 +910,36 @@ async function serveMainPage() {
               }
             } else {
               expandBtn.style.display = 'none';
+            }
+
+            // Display artist credit
+            const artistCredit = document.getElementById('artistCredit');
+            const artistName = document.getElementById('artistName');
+            const artistSocial = document.getElementById('artistSocial');
+
+            if (data.credit_name && data.credit_name !== 'Unknown Artist') {
+              // Show the credit section
+              artistCredit.classList.remove('hidden');
+
+              // Build artist name (with or without link)
+              if (data.credit_url) {
+                artistName.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">\${escapeHtml(data.credit_name)}</a>\`;
+              } else {
+                artistName.textContent = data.credit_name;
+              }
+
+              // Build social media link if available
+              if (data.credit_social_handle && data.credit_platform) {
+                const platformDisplay = data.credit_platform.charAt(0).toUpperCase() + data.credit_platform.slice(1);
+                artistSocial.innerHTML = \`<a href="\${escapeHtml(data.credit_url || '#')}" target="_blank" rel="noopener noreferrer">@\${escapeHtml(data.credit_social_handle)} on \${escapeHtml(platformDisplay)}</a>\`;
+              } else if (data.credit_url) {
+                artistSocial.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">View Profile</a>\`;
+              } else {
+                artistSocial.textContent = '';
+              }
+            } else {
+              // Hide credit section for unknown artists
+              artistCredit.classList.add('hidden');
             }
 
             // Build full metadata panel
