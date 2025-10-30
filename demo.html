@@ -526,9 +526,16 @@
 
     // Load demo data
     function loadDemoData() {
+      const imageContainer = document.querySelector('.image-container');
       const tagPreview = document.getElementById('tagPreview');
       const expandBtn = document.getElementById('expandBtn');
       const metadataContent = document.getElementById('metadataContent');
+
+      // Set container aspect ratio based on image dimensions
+      if (mockData.width && mockData.height) {
+        const aspectRatio = mockData.width / mockData.height;
+        imageContainer.style.aspectRatio = aspectRatio.toString();
+      }
 
       // Build tag preview (show top 5 tags)
       tagPreview.innerHTML = '';
