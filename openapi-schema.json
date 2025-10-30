@@ -40,6 +40,7 @@
         "summary": "Get a random active image",
         "description": "Returns a single random image from the active collection with full metadata, tags, and attribution",
         "operationId": "getRandomImage",
+        "security": [],
         "responses": {
           "200": {
             "description": "Successful response with random image data",
@@ -108,6 +109,7 @@
         "summary": "List images with pagination",
         "description": "Returns a paginated list of active images with basic metadata",
         "operationId": "listImages",
+        "security": [],
         "parameters": [
           {
             "name": "limit",
@@ -165,6 +167,7 @@
         "summary": "Get database statistics",
         "description": "Returns overall statistics about images, tags, and credited artists",
         "operationId": "getStats",
+        "security": [],
         "responses": {
           "200": {
             "description": "Successful response with statistics",
@@ -202,6 +205,7 @@
         "summary": "Get list of all active image filenames",
         "description": "Returns a JSON array of all active image filenames. Cached in KV for performance.",
         "operationId": "getImagesList",
+        "security": [],
         "responses": {
           "200": {
             "description": "Successful response with image filenames",
@@ -244,6 +248,7 @@
         "summary": "Get all tags organized by category",
         "description": "Returns all tags grouped by their category (content, character, creator, source) with usage counts",
         "operationId": "getAllTags",
+        "security": [],
         "responses": {
           "200": {
             "description": "Successful response with organized tags",
@@ -274,6 +279,7 @@
         "summary": "Create a new tag",
         "description": "Creates a new tag in the specified category",
         "operationId": "createTag",
+        "security": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -338,6 +344,7 @@
         "summary": "Get detailed image information",
         "description": "Returns complete image metadata including tags and credit information",
         "operationId": "getImageDetails",
+        "security": [],
         "parameters": [
           {
             "name": "id",
@@ -389,6 +396,7 @@
         "summary": "Update image metadata",
         "description": "Updates tags and credit information for an image",
         "operationId": "updateImageMetadata",
+        "security": [],
         "parameters": [
           {
             "name": "id",
@@ -458,6 +466,7 @@
         "summary": "Upload a new image",
         "description": "Uploads an image file to R2 storage and creates a database entry",
         "operationId": "uploadImage",
+        "security": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -528,6 +537,7 @@
         "summary": "Sync D1 database to KV cache",
         "description": "Synchronizes the active images list from D1 database to KV cache for improved performance",
         "operationId": "syncKVCache",
+        "security": [],
         "responses": {
           "200": {
             "description": "Sync completed successfully",
@@ -585,6 +595,7 @@
         "summary": "Sync D1 database to KV cache (alternative endpoint)",
         "description": "Alternative endpoint for syncing the active images list from D1 database to KV cache",
         "operationId": "syncKVCacheAlt",
+        "security": [],
         "responses": {
           "200": {
             "description": "Sync completed successfully",

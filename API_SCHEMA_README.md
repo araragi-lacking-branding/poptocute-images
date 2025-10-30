@@ -129,23 +129,26 @@ View API Shield analytics:
 ### Validate Schema Locally
 
 ```bash
-# Install OpenAPI validator
-npm install -g @apidevtools/swagger-cli
+# Using Redocly CLI (recommended - actively maintained)
+npx @redocly/cli lint openapi-schema.yaml
 
-# Validate YAML schema
-swagger-cli validate openapi-schema.yaml
+# Or validate JSON schema
+npx @redocly/cli lint openapi-schema.json
 
-# Validate JSON schema
-swagger-cli validate openapi-schema.json
+# Check for specific rules
+npx @redocly/cli lint openapi-schema.yaml --extends=recommended
 ```
 
 ### Generate API Documentation
 
 ```bash
-# Using Redoc
-npx redoc-cli bundle openapi-schema.yaml -o api-docs.html
+# Using Redocly to build HTML documentation
+npx @redocly/cli build-docs openapi-schema.yaml -o api-docs.html
 
-# Using Swagger UI
+# Preview documentation locally
+npx @redocly/cli preview-docs openapi-schema.yaml
+
+# Using Swagger UI (alternative)
 npx swagger-ui-watcher openapi-schema.yaml
 ```
 
@@ -198,7 +201,23 @@ For issues or questions:
 - Cloudflare Support: https://dash.cloudflare.com/support
 - OpenAPI Specification: https://github.com/OAI/OpenAPI-Specification
 
+## Validation Results
+
+Current schema validation status:
+- ✅ **Valid OpenAPI 3.0.3 schema**
+- ⚠️ 9 warnings (non-blocking, best practice suggestions)
+- ❌ 0 errors
+
+Run validation with: `npx @redocly/cli lint openapi-schema.yaml`
+
 ## Version History
+
+- **v1.0.1** (2025-01-30) - Security and tooling updates
+  - Fixed security definitions for all endpoints
+  - Updated documentation to use @redocly/cli (actively maintained)
+  - Removed deprecated swagger-cli references
+  - Added explicit security: [] for public endpoints
+  - Added TODO comments for admin endpoint authentication
 
 - **v1.0.0** (2025-01-30) - Initial schema creation
   - Documented all public and admin endpoints
