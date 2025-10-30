@@ -975,28 +975,18 @@ async function serveMainPage() {
               // Show unknown artist with help option
               artistName.innerHTML = \`<span class="artist-unknown">Unknown Artist</span>\`;
 
-              // Build email body - use %0D%0A for line breaks in mailto
-              const lines = [
-                \`Image: \${data.filename}\`,
-                '',
-                'Thank you for helping us credit artists! Please provide any info you have (all fields optional):',
-                '',
-                'Request (Attribution, Removal, Edit, etc.):',
-                '',
-                'Artist Name/Handle:',
-                '',
-                'Original Art Location (URL):',
-                '',
-                'Artist Social Media:',
-                '',
-                'Artist Company (if applicable):',
-                '',
-                'Message from Artist (optional):',
-                '',
-                'Artist Contact for Licensing (private, not displayed):',
-                '',
-              ];
-              const emailBody = lines.join('%0D%0A');
+              // Build email body - simple paragraph approach for better email client compatibility
+              const emailBody = encodeURIComponent(
+                \`Image: \${data.filename}
+
+Thank you for helping us credit artists! Please share any information you have about this image. All fields are completely optional - provide whatever you know.
+
+What would you like us to do? (Attribution, Removal, Edit, etc.)
+
+If you know the artist, please share: Artist name or handle, where to find their work (URL or social media), their company/studio if applicable, and any message they'd like displayed. If you have contact info for licensing, we'll keep that private.
+
+We'll honor any request - whether it's adding proper credit, removing the image, or making edits. Thank you for helping us do right by artists!\`
+              );
 
               artistSocial.innerHTML = \`<span class="artist-credit-help">Know who created this? <a href="mailto:lambda@cutetopop.com?subject=Artist Attribution - \${encodeURIComponent(data.filename)}&body=\${emailBody}">Help us attribute</a></span>\`;
             } else {
