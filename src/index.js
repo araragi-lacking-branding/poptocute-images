@@ -753,7 +753,10 @@ async function serveMainPage() {
             }
 
             // Load image
-            const imagePath = \`/images/\${data.filename}\`;
+            // Handle filenames that may or may not include 'images/' prefix
+            const imagePath = data.filename.startsWith('images/')
+              ? \`/\${data.filename}\`
+              : \`/images/\${data.filename}\`;
             const tempImg = new Image();
 
             tempImg.onload = () => {
