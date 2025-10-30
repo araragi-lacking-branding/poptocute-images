@@ -22,29 +22,63 @@
     }
 
     .image-container {
-      width: 100%;
-      max-width: min(90vw, 70vh);
-      aspect-ratio: 1 / 1;
       position: relative;
-      margin-bottom: 0.75rem;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto 0.75rem;
       background: #f5f5f5;
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 6px 30px rgba(0,0,0,.15);
+      min-height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     #randomImage {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      max-width: 100%;
-      max-height: 100%;
-      width: auto;
+      width: 100%;
       height: auto;
+      max-height: 85vh;
       object-fit: contain;
       opacity: 1;
       transition: opacity 0.3s ease-in-out;
+      display: block;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      .image-container {
+        max-width: 95vw;
+        min-height: 250px;
+        margin-bottom: 0.5rem;
+      }
+
+      #randomImage {
+        max-height: 70vh;
+      }
+    }
+
+    /* Tablet/medium screens */
+    @media (min-width: 769px) and (max-width: 1200px) {
+      .image-container {
+        max-width: 700px;
+      }
+
+      #randomImage {
+        max-height: 80vh;
+      }
+    }
+
+    /* Large desktop screens */
+    @media (min-width: 1201px) {
+      .image-container {
+        max-width: 1000px;
+      }
+
+      #randomImage {
+        max-height: 90vh;
+      }
     }
 
     /* Tag Overlay - Bottom positioned */
