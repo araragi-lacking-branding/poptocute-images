@@ -39,6 +39,7 @@ paths:
       summary: Get a random active image
       description: Returns a single random image from the active collection with full metadata, tags, and attribution
       operationId: getRandomImage
+      security: []  # Public endpoint, no authentication required
       responses:
         '200':
           description: Successful response with random image data
@@ -86,6 +87,7 @@ paths:
       summary: List images with pagination
       description: Returns a paginated list of active images with basic metadata
       operationId: listImages
+      security: []  # Public endpoint, no authentication required
       parameters:
         - name: limit
           in: query
@@ -125,6 +127,7 @@ paths:
       summary: Get database statistics
       description: Returns overall statistics about images, tags, and credited artists
       operationId: getStats
+      security: []  # Public endpoint, no authentication required
       responses:
         '200':
           description: Successful response with statistics
@@ -150,6 +153,7 @@ paths:
       summary: Get list of all active image filenames
       description: Returns a JSON array of all active image filenames. Cached in KV for performance.
       operationId: getImagesList
+      security: []  # Public endpoint, no authentication required
       responses:
         '200':
           description: Successful response with image filenames
@@ -177,6 +181,7 @@ paths:
       summary: Get all tags organized by category
       description: Returns all tags grouped by their category (content, character, creator, source) with usage counts
       operationId: getAllTags
+      security: []  # TODO: Authentication not yet implemented - should require ApiKeyAuth
       responses:
         '200':
           description: Successful response with organized tags
@@ -196,6 +201,7 @@ paths:
       summary: Create a new tag
       description: Creates a new tag in the specified category
       operationId: createTag
+      security: []  # TODO: Authentication not yet implemented - should require ApiKeyAuth
       requestBody:
         required: true
         content:
@@ -237,6 +243,7 @@ paths:
       summary: Get detailed image information
       description: Returns complete image metadata including tags and credit information
       operationId: getImageDetails
+      security: []  # TODO: Authentication not yet implemented - should require ApiKeyAuth
       parameters:
         - name: id
           in: path
@@ -269,6 +276,7 @@ paths:
       summary: Update image metadata
       description: Updates tags and credit information for an image
       operationId: updateImageMetadata
+      security: []  # TODO: Authentication not yet implemented - should require ApiKeyAuth
       parameters:
         - name: id
           in: path
@@ -313,6 +321,7 @@ paths:
       summary: Upload a new image
       description: Uploads an image file to R2 storage and creates a database entry
       operationId: uploadImage
+      security: []  # TODO: Authentication not yet implemented - should require ApiKeyAuth
       requestBody:
         required: true
         content:
@@ -358,6 +367,7 @@ paths:
       summary: Sync D1 database to KV cache
       description: Synchronizes the active images list from D1 database to KV cache for improved performance
       operationId: syncKVCache
+      security: []  # TODO: Authentication not yet implemented - should require ApiKeyAuth
       responses:
         '200':
           description: Sync completed successfully
@@ -396,6 +406,7 @@ paths:
       summary: Sync D1 database to KV cache (alternative endpoint)
       description: Alternative endpoint for syncing the active images list from D1 database to KV cache
       operationId: syncKVCacheAlt
+      security: []  # TODO: Authentication not yet implemented - should require ApiKeyAuth
       responses:
         '200':
           description: Sync completed successfully
