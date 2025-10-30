@@ -772,6 +772,7 @@ async function serveMainPage() {
         async function loadRandomImage() {
           const loadingEl = document.querySelector('.loading');
           const img = document.getElementById('randomImage');
+          const imageContainer = document.querySelector('.image-container');
           const tagOverlay = document.getElementById('tagOverlay');
           const tagPreview = document.getElementById('tagPreview');
           const expandBtn = document.getElementById('expandBtn');
@@ -785,6 +786,15 @@ async function serveMainPage() {
 
             if (!data.filename) {
               throw new Error('No image available');
+            }
+
+            // Set container aspect ratio before loading image to prevent layout shift
+            if (data.width && data.height) {
+              const aspectRatio = data.width / data.height;
+              imageContainer.style.aspectRatio = aspectRatio.toString();
+            } else {
+              // Fallback to a reasonable default if dimensions aren't available
+              imageContainer.style.aspectRatio = '1';
             }
 
             // Load image
