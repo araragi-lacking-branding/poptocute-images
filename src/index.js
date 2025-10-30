@@ -627,8 +627,25 @@ async function serveMainPage() {
           color: #999;
         }
 
-        .artist-credit.hidden {
-          display: none;
+        .artist-credit-help {
+          font-size: 0.85rem;
+          color: #888;
+          font-style: italic;
+        }
+
+        .artist-credit-help a {
+          color: #4ecdc4;
+          text-decoration: none;
+          font-style: normal;
+        }
+
+        .artist-credit-help a:hover {
+          text-decoration: underline;
+        }
+
+        .artist-unknown {
+          color: #888;
+          font-style: italic;
         }
 
         .disclaimer {
@@ -722,7 +739,7 @@ async function serveMainPage() {
         <div id="metadataContent"></div>
       </aside>
 
-      <div class="artist-credit hidden" id="artistCredit">
+      <div class="artist-credit" id="artistCredit">
         <div class="artist-credit-label">Artist</div>
         <div class="artist-credit-name" id="artistName"></div>
         <div class="artist-credit-social" id="artistSocial"></div>
@@ -912,15 +929,19 @@ async function serveMainPage() {
               expandBtn.style.display = 'none';
             }
 
-            // Display artist credit
+            // Display artist credit - always visible for transparency
             const artistCredit = document.getElementById('artistCredit');
             const artistName = document.getElementById('artistName');
             const artistSocial = document.getElementById('artistSocial');
 
-            if (data.credit_name && data.credit_name !== 'Unknown Artist') {
-              // Show the credit section
-              artistCredit.classList.remove('hidden');
+            // Determine if artist is unknown
+            const isUnknown = !data.credit_name || data.credit_name === 'Unknown Artist';
 
+            if (isUnknown) {
+              // Show unknown artist with help option
+              artistName.innerHTML = \`<span class="artist-unknown">Unknown Artist</span>\`;
+              artistSocial.innerHTML = \`<span class="artist-credit-help">Know who created this? <a href="mailto:attribution@yourdomain.com?subject=Image Attribution&body=Image ID: \${data.id}">Help us attribute</a></span>\`;
+            } else {
               // Build artist name (with or without link)
               if (data.credit_url) {
                 artistName.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">\${escapeHtml(data.credit_name)}</a>\`;
@@ -928,7 +949,7 @@ async function serveMainPage() {
                 artistName.textContent = data.credit_name;
               }
 
-              // Build social media link if available
+              // Build social media link - only if available
               if (data.credit_social_handle && data.credit_platform) {
                 const platformDisplay = data.credit_platform.charAt(0).toUpperCase() + data.credit_platform.slice(1);
                 artistSocial.innerHTML = \`<a href="\${escapeHtml(data.credit_url || '#')}" target="_blank" rel="noopener noreferrer">@\${escapeHtml(data.credit_social_handle)} on \${escapeHtml(platformDisplay)}</a>\`;
@@ -937,9 +958,6 @@ async function serveMainPage() {
               } else {
                 artistSocial.textContent = '';
               }
-            } else {
-              // Hide credit section for unknown artists
-              artistCredit.classList.add('hidden');
             }
 
             // Build full metadata panel

@@ -346,8 +346,25 @@
       color: #999;
     }
 
-    .artist-credit.hidden {
-      display: none;
+    .artist-credit-help {
+      font-size: 0.85rem;
+      color: #888;
+      font-style: italic;
+    }
+
+    .artist-credit-help a {
+      color: #4ecdc4;
+      text-decoration: none;
+      font-style: normal;
+    }
+
+    .artist-credit-help a:hover {
+      text-decoration: underline;
+    }
+
+    .artist-unknown {
+      color: #888;
+      font-style: italic;
     }
 
     .disclaimer {
@@ -622,15 +639,19 @@
         expandBtn.style.display = 'inline-flex';
       }
 
-      // Display artist credit
+      // Display artist credit - always visible for transparency
       const artistCredit = document.getElementById('artistCredit');
       const artistName = document.getElementById('artistName');
       const artistSocial = document.getElementById('artistSocial');
 
-      if (mockData.credit_name && mockData.credit_name !== 'Unknown Artist') {
-        // Show the credit section
-        artistCredit.classList.remove('hidden');
+      // Determine if artist is unknown
+      const isUnknown = !mockData.credit_name || mockData.credit_name === 'Unknown Artist';
 
+      if (isUnknown) {
+        // Show unknown artist with help option
+        artistName.innerHTML = `<span class="artist-unknown">Unknown Artist</span>`;
+        artistSocial.innerHTML = `<span class="artist-credit-help">Know who created this? <a href="mailto:attribution@yourdomain.com?subject=Image Attribution&body=Image ID: ${mockData.id}">Help us attribute</a></span>`;
+      } else {
         // Build artist name (with or without link)
         if (mockData.credit_url) {
           artistName.innerHTML = `<a href="${escapeHtml(mockData.credit_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(mockData.credit_name)}</a>`;
@@ -638,7 +659,7 @@
           artistName.textContent = mockData.credit_name;
         }
 
-        // Build social media link if available
+        // Build social media link - only if available
         if (mockData.credit_social_handle && mockData.credit_platform) {
           const platformDisplay = mockData.credit_platform.charAt(0).toUpperCase() + mockData.credit_platform.slice(1);
           artistSocial.innerHTML = `<a href="${escapeHtml(mockData.credit_url || '#')}" target="_blank" rel="noopener noreferrer">@${escapeHtml(mockData.credit_social_handle)} on ${escapeHtml(platformDisplay)}</a>`;
@@ -647,9 +668,6 @@
         } else {
           artistSocial.textContent = '';
         }
-      } else {
-        // Hide credit section for unknown artists
-        artistCredit.classList.add('hidden');
       }
 
       // Build full metadata panel
