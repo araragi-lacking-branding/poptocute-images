@@ -368,12 +368,13 @@
     }
 
     .disclaimer {
-      font-size: 0.9rem;
-      color: #444;
+      font-size: 0.85rem;
+      color: #888;
       text-align: center;
       max-width: 600px;
       line-height: 1.4;
       margin-top: 0.75rem;
+      opacity: 0.8;
     }
 
     .footer-link {
@@ -398,6 +399,18 @@
       .tag, .expand-btn {
         background: #fff;
         border: 2px solid #000;
+      }
+    }
+
+    /* Accessibility - Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
       }
     }
 
