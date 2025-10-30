@@ -940,7 +940,7 @@ async function serveMainPage() {
             if (isUnknown) {
               // Show unknown artist with help option
               artistName.innerHTML = \`<span class="artist-unknown">Unknown Artist</span>\`;
-              artistSocial.innerHTML = \`<span class="artist-credit-help">Know who created this? <a href="mailto:lambda@cutetopop.com?subject=Image Attribution&body=Image ID: \${data.id}">Help us attribute</a></span>\`;
+              artistSocial.innerHTML = \`<span class="artist-credit-help">Know who created this? <a href="mailto:lambda@cutetopop.com?subject=Artist Attribution - Image ID: \${encodeURIComponent(data.filename)}">Help us attribute</a></span>\`;
             } else {
               // Build artist name (with or without link)
               if (data.credit_url) {
