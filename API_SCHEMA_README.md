@@ -114,6 +114,37 @@ After uploading the schema:
    - **Block** - Rejects requests that don't match the schema
 4. Monitor logs to identify legitimate traffic issues before switching to Block mode
 
+## Known Limitations
+
+### Multipart/Form-Data Not Supported
+
+Cloudflare API Shield does not currently support schema validation for `multipart/form-data` request bodies. This affects:
+
+- **Endpoint:** `POST /api/admin/upload`
+- **Impact:** Request body structure cannot be validated by Cloudflare
+- **Workaround:** Validation is handled in the Worker code
+- **Still Protected:** Rate limiting and volumetric abuse detection still function normally
+
+When uploading the schema to Cloudflare, you will see this warning:
+```json
+{
+  "code": 29,
+  "message": "unsupported media type: multipart/form-data",
+  "locations": [".paths[\"/api/admin/upload\"].post.requestBody"]
+}
+```
+
+This is **expected behavior** and does not affect the other 10 endpoints, which will be fully validated.
+
+### Supported Content Types
+
+Cloudflare API Shield Schema Validation supports:
+- ✅ `application/json`
+- ✅ `application/x-www-form-urlencoded`
+- ✅ Query parameters
+- ✅ Path parameters
+- ❌ `multipart/form-data` (file uploads)
+
 ## Monitoring API Abuse
 
 View API Shield analytics:
@@ -211,6 +242,12 @@ Current schema validation status:
 Run validation with: `npx @redocly/cli lint openapi-schema.yaml`
 
 ## Version History
+
+- **v1.0.2** (2025-01-30) - Documentation update for Cloudflare limitations
+  - Added "Known Limitations" section documenting multipart/form-data restriction
+  - Updated /api/admin/upload description with Cloudflare validation note
+  - Clarified that warning about multipart/form-data is expected behavior
+  - Documented supported content types for schema validation
 
 - **v1.0.1** (2025-01-30) - Security and tooling updates
   - Fixed security definitions for all endpoints

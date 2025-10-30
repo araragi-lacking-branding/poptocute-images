@@ -464,7 +464,7 @@
           "admin"
         ],
         "summary": "Upload a new image",
-        "description": "Uploads an image file to R2 storage and creates a database entry",
+        "description": "Uploads an image file to R2 storage and creates a database entry.\n\n**Note:** Cloudflare API Shield does not support schema validation for multipart/form-data requests.\nThis endpoint will still benefit from rate limiting and volumetric abuse detection, but request\nbody validation must be handled in the Worker code.\n",
         "operationId": "uploadImage",
         "security": [],
         "requestBody": {
