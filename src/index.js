@@ -657,6 +657,23 @@ async function serveMainPage() {
           margin-top: 0.75rem;
         }
 
+        .footer-link {
+          font-size: 0.75rem;
+          color: #999;
+          text-align: center;
+          margin-top: 0.5rem;
+        }
+
+        .footer-link a {
+          color: #999;
+          text-decoration: none;
+          transition: color 0.2s ease;
+        }
+
+        .footer-link a:hover {
+          color: #4ecdc4;
+        }
+
         .loading {
           position: absolute;
           top: 50%;
@@ -747,6 +764,10 @@ async function serveMainPage() {
 
       <div class="disclaimer">
         This website displays images that do not belong to us. We are working on adding proper attribution and reporting features.
+      </div>
+
+      <div class="footer-link">
+        <a href="https://github.com/araragi-lacking-branding/poptocute-images" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
 
       <script>
