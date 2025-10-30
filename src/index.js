@@ -947,6 +947,8 @@ async function serveMainPage() {
                 '',
                 'Thank you for helping us credit artists! Please provide any info you have (all fields optional):',
                 '',
+                'Request (Attribution, Removal, Edit, etc.):',
+                '',
                 'Artist Name/Handle:',
                 '',
                 'Original Art Location (URL):',
