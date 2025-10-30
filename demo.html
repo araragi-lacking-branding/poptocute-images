@@ -284,6 +284,72 @@
       text-decoration: underline;
     }
 
+    /* Artist Credit Display */
+    .artist-credit {
+      text-align: center;
+      margin: 1rem auto 0.5rem;
+      max-width: 600px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .artist-credit-label {
+      font-size: 0.75rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.25rem;
+    }
+
+    .artist-credit-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.25rem;
+    }
+
+    .artist-credit-name a {
+      color: #333;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .artist-credit-name a:hover {
+      color: #4ecdc4;
+    }
+
+    .artist-credit-social {
+      font-size: 0.9rem;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+
+    .artist-credit-social a {
+      color: #4ecdc4;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: color 0.2s ease;
+    }
+
+    .artist-credit-social a:hover {
+      color: #3ab5ac;
+      text-decoration: underline;
+    }
+
+    .artist-credit-social::before {
+      content: '→';
+      font-size: 0.9rem;
+      color: #999;
+    }
+
+    .artist-credit.hidden {
+      display: none;
+    }
+
     .disclaimer {
       font-size: 0.9rem;
       color: #444;
@@ -382,6 +448,12 @@
     <div id="metadataContent"></div>
   </aside>
 
+  <div class="artist-credit" id="artistCredit">
+    <div class="artist-credit-label">Artist</div>
+    <div class="artist-credit-name" id="artistName"></div>
+    <div class="artist-credit-social" id="artistSocial"></div>
+  </div>
+
   <div class="disclaimer">
     This is a demo of the tag display system. Hover over the image to see tags appear!
   </div>
@@ -399,6 +471,8 @@
       created_at: '2025-10-30 12:00:00',
       credit_name: 'Demo Artist',
       credit_url: 'https://example.com/artist',
+      credit_social_handle: 'demoartist',
+      credit_platform: 'twitter',
       credit_license: 'CC BY-SA 4.0',
       tags: [
         { name: 'cute', display_name: 'Cute', category: 'content' },
@@ -546,6 +620,36 @@
         });
 
         expandBtn.style.display = 'inline-flex';
+      }
+
+      // Display artist credit
+      const artistCredit = document.getElementById('artistCredit');
+      const artistName = document.getElementById('artistName');
+      const artistSocial = document.getElementById('artistSocial');
+
+      if (mockData.credit_name && mockData.credit_name !== 'Unknown Artist') {
+        // Show the credit section
+        artistCredit.classList.remove('hidden');
+
+        // Build artist name (with or without link)
+        if (mockData.credit_url) {
+          artistName.innerHTML = `<a href="${escapeHtml(mockData.credit_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(mockData.credit_name)}</a>`;
+        } else {
+          artistName.textContent = mockData.credit_name;
+        }
+
+        // Build social media link if available
+        if (mockData.credit_social_handle && mockData.credit_platform) {
+          const platformDisplay = mockData.credit_platform.charAt(0).toUpperCase() + mockData.credit_platform.slice(1);
+          artistSocial.innerHTML = `<a href="${escapeHtml(mockData.credit_url || '#')}" target="_blank" rel="noopener noreferrer">@${escapeHtml(mockData.credit_social_handle)} on ${escapeHtml(platformDisplay)}</a>`;
+        } else if (mockData.credit_url) {
+          artistSocial.innerHTML = `<a href="${escapeHtml(mockData.credit_url)}" target="_blank" rel="noopener noreferrer">View Profile</a>`;
+        } else {
+          artistSocial.textContent = '';
+        }
+      } else {
+        // Hide credit section for unknown artists
+        artistCredit.classList.add('hidden');
       }
 
       // Build full metadata panel
