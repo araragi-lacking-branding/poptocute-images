@@ -941,25 +941,28 @@ async function serveMainPage() {
               // Show unknown artist with help option
               artistName.innerHTML = \`<span class="artist-unknown">Unknown Artist</span>\`;
 
-              // Build email body with attribution form
-              const emailBody = \`Image: \${data.filename}
+              // Build email body - use %0D%0A for line breaks in mailto
+              const lines = [
+                \`Image: \${data.filename}\`,
+                '',
+                'Thank you for helping us credit artists! Please provide any info you have (all fields optional):',
+                '',
+                'Artist Name/Handle:',
+                '',
+                'Original Art Location (URL):',
+                '',
+                'Artist Social Media:',
+                '',
+                'Artist Company (if applicable):',
+                '',
+                'Message from Artist (optional):',
+                '',
+                'Artist Contact for Licensing (private, not displayed):',
+                '',
+              ];
+              const emailBody = lines.join('%0D%0A');
 
-Thank you for attribution and helping us credit artists. We will credit, remove, or edit at any request, but if you can provide the following, it will help give full credit and reach out to the artist to license. This is not mandatory, and we will respect your original request regardless of completion.
-
-Artist Name / Handle:
-
-Original / Static Art location:
-
-Artist Social Media:
-
-Artist Company (if applies):
-
-Message from the Artist to Display:
-
-Artist Contact for Licensing (will not be displayed):
-\`;
-
-              artistSocial.innerHTML = \`<span class="artist-credit-help">Know who created this? <a href="mailto:lambda@cutetopop.com?subject=Artist Attribution - \${encodeURIComponent(data.filename)}&body=\${encodeURIComponent(emailBody)}">Help us attribute</a></span>\`;
+              artistSocial.innerHTML = \`<span class="artist-credit-help">Know who created this? <a href="mailto:lambda@cutetopop.com?subject=Artist Attribution - \${encodeURIComponent(data.filename)}&body=\${emailBody}">Help us attribute</a></span>\`;
             } else {
               // Build artist name (with or without link)
               if (data.credit_url) {
