@@ -301,6 +301,7 @@ async function serveMainPage() {
           position: relative;
           width: 100%;
           max-width: 900px;
+          max-height: 85vh;
           margin: 0 auto 0.75rem;
           background: #f5f5f5;
           border-radius: 12px;
@@ -308,9 +309,6 @@ async function serveMainPage() {
           box-shadow: 0 6px 30px rgba(0,0,0,.15);
           /* Start with a reasonable min-height to prevent layout shift */
           min-height: 300px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
         }
 
         #randomImage {
@@ -331,6 +329,7 @@ async function serveMainPage() {
         @media (max-width: 768px) {
           .image-container {
             max-width: 95vw;
+            max-height: 70vh;
             min-height: 250px;
             margin-bottom: 0.5rem;
           }
@@ -344,6 +343,7 @@ async function serveMainPage() {
         @media (min-width: 769px) and (max-width: 1200px) {
           .image-container {
             max-width: 700px;
+            max-height: 80vh;
           }
 
           #randomImage {
@@ -355,6 +355,7 @@ async function serveMainPage() {
         @media (min-width: 1201px) {
           .image-container {
             max-width: 1000px;
+            max-height: 90vh;
           }
 
           #randomImage {
@@ -911,15 +912,6 @@ async function serveMainPage() {
 
             if (!data.filename) {
               throw new Error('No image available');
-            }
-
-            // Set container aspect ratio before loading image to prevent layout shift
-            if (data.width && data.height) {
-              const aspectRatio = data.width / data.height;
-              imageContainer.style.aspectRatio = aspectRatio.toString();
-            } else {
-              // Fallback to a reasonable default if dimensions aren't available
-              imageContainer.style.aspectRatio = '1';
             }
 
             // Load image
