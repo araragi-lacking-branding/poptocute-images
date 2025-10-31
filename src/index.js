@@ -643,6 +643,22 @@ async function serveMainPage() {
           text-decoration: underline;
         }
 
+        /* Skeleton loading animation */
+        .skeleton-text {
+          display: inline-block;
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: skeleton-loading 1.5s ease-in-out infinite;
+          border-radius: 4px;
+          color: transparent;
+          user-select: none;
+        }
+
+        @keyframes skeleton-loading {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+
         /* Artist Credit Display */
         .artist-credit {
           text-align: center;
@@ -880,8 +896,12 @@ async function serveMainPage() {
       <div class="footer-content">
         <div class="artist-credit" id="artistCredit">
           <div class="artist-credit-label">Artist</div>
-          <div class="artist-credit-name" id="artistName"></div>
-          <div class="artist-credit-social" id="artistSocial"></div>
+          <div class="artist-credit-name" id="artistName">
+            <span class="skeleton-text">Loading artist...</span>
+          </div>
+          <div class="artist-credit-social" id="artistSocial">
+            <span class="skeleton-text">Loading details...</span>
+          </div>
         </div>
 
         <div class="disclaimer">
@@ -1089,21 +1109,28 @@ async function serveMainPage() {
             // Add loading state with delay for spinner
             imageContainer.classList.add('loading');
             
-            // Load image directly
-            img.onload = () => {
-              // Remove loading state and show image
-              imageContainer.classList.remove('loading');
-              img.classList.add('loaded');
-            };
+            // Set source to trigger load
+            img.src = imagePath;
+
+            // Use decode() API for smoother rendering
+            // This decodes the image before displaying it, reducing jank
+            img.decode()
+              .then(() => {
+                // Image decoded successfully, now show it
+                imageContainer.classList.remove('loading');
+                img.classList.add('loaded');
+              })
+              .catch(() => {
+                // Fallback if decode() fails - just show the image
+                imageContainer.classList.remove('loading');
+                img.classList.add('loaded');
+              });
 
             img.onerror = () => {
               imageContainer.classList.remove('loading');
               loadingEl.textContent = 'Failed to load image';
               loadingEl.style.display = 'block';
             };
-
-            // Set source to trigger load
-            img.src = imagePath;
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
@@ -1146,7 +1173,7 @@ async function serveMainPage() {
               if (data.credit_url) {
                 artistName.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">\${escapeHtml(data.credit_name)}</a>\`;
               } else {
-                artistName.textContent = data.credit_name;
+                artistName.innerHTML = escapeHtml(data.credit_name);
               }
 
               // Build social media link - only if available
@@ -1156,7 +1183,7 @@ async function serveMainPage() {
               } else if (data.credit_url) {
                 artistSocial.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">View Profile</a>\`;
               } else {
-                artistSocial.textContent = '';
+                artistSocial.innerHTML = '';
               }
             }
 
