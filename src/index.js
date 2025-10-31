@@ -198,7 +198,11 @@ async function getRandomImage(env, corsHeaders) {
       ...result,
       tags: tags.results || []
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, must-revalidate'
+      }
     });
   } catch (error) {
     console.error('Error fetching random image:', error);
@@ -280,6 +284,11 @@ async function serveMainPage() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>*cute* and *pop*</title>
       <link rel="icon" type="image/x-icon" href="favicon.ico">
+      <!-- Performance optimizations: Resource hints -->
+      <link rel="preconnect" href="https://cutetopop.com">
+      <link rel="dns-prefetch" href="https://cutetopop.com">
+      <!-- Preload the API endpoint for faster data fetching -->
+      <link rel="preload" href="/api/random" as="fetch" crossorigin>
       <style>
         * {
           box-sizing: border-box;
@@ -742,7 +751,7 @@ async function serveMainPage() {
     <body>
       <div class="image-container" role="img" aria-label="Random cute image">
         <div class="loading" aria-live="polite">Loading...</div>
-        <img id="randomImage" alt="" loading="eager" />
+        <img id="randomImage" alt="" loading="eager" fetchpriority="high" />
 
         <div class="tag-overlay" id="tagOverlay" aria-label="Image tags">
           <div class="tag-preview" id="tagPreview" role="navigation" aria-label="Quick tags"></div>
@@ -905,7 +914,13 @@ async function serveMainPage() {
           const metadataContent = document.getElementById('metadataContent');
 
           try {
-            const response = await fetch('/api/random', {cache: 'default'});
+            // Use no-cache for random API to ensure fresh images, but allow conditional requests
+            const response = await fetch('/api/random', {
+              cache: 'no-cache',
+              headers: {
+                'Accept': 'application/json'
+              }
+            });
             if (!response.ok) throw new Error('Failed to fetch image');
 
             const data = await response.json();
@@ -914,11 +929,14 @@ async function serveMainPage() {
               throw new Error('No image available');
             }
 
-            // Load image
+            // Load image with WebP optimization via Cloudflare Image Resizing
             // Handle filenames that may or may not include 'images/' prefix
-            const imagePath = data.filename.startsWith('images/')
-              ? \`/\${data.filename}\`
-              : \`/images/\${data.filename}\`;
+            const imageFilename = data.filename.startsWith('images/')
+              ? data.filename
+              : \`images/\${data.filename}\`;
+            
+            // Use Cloudflare Image Resizing for WebP conversion and optimization
+            const imagePath = \`/cdn-cgi/image/format=auto,quality=85,width=1200/\${imageFilename}\`;
             const tempImg = new Image();
 
             tempImg.onload = () => {
@@ -1043,7 +1061,7 @@ async function serveMainPage() {
           }
         });
 
-        // Initialize
+        // Initialize immediately - start loading before DOM is fully ready
         loadRandomImage();
       </script>
     </body>
