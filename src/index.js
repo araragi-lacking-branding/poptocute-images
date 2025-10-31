@@ -201,7 +201,7 @@ async function getRandomImage(env, corsHeaders) {
       headers: { 
         ...corsHeaders, 
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, must-revalidate'
+        'Cache-Control': 'no-cache'
       }
     });
   } catch (error) {
@@ -287,8 +287,6 @@ async function serveMainPage() {
       <!-- Performance optimizations: Resource hints -->
       <link rel="preconnect" href="https://cutetopop.com">
       <link rel="dns-prefetch" href="https://cutetopop.com">
-      <!-- Preload the API endpoint for faster data fetching -->
-      <link rel="preload" href="/api/random" as="fetch" crossorigin>
       <style>
         * {
           box-sizing: border-box;
@@ -914,9 +912,8 @@ async function serveMainPage() {
           const metadataContent = document.getElementById('metadataContent');
 
           try {
-            // Use no-cache for random API to ensure fresh images, but allow conditional requests
+            // Use default cache behavior for API call
             const response = await fetch('/api/random', {
-              cache: 'no-cache',
               headers: {
                 'Accept': 'application/json'
               }
