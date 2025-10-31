@@ -379,14 +379,14 @@ async function serveMainPage() {
           object-fit: contain;
           opacity: 0;
           visibility: hidden;
-          transition: opacity 0.3s ease-in-out, visibility 0s linear 0.3s;
+          transition: opacity 0.2s ease-out, visibility 0s linear 0.2s;
           display: block;
         }
 
         #randomImage.loaded {
           opacity: 1;
           visibility: visible;
-          transition: opacity 0.3s ease-in-out, visibility 0s linear 0s;
+          transition: opacity 0.2s ease-out, visibility 0s linear 0s;
         }
 
         /* Mobile optimizations */
@@ -1109,28 +1109,21 @@ async function serveMainPage() {
             // Add loading state with delay for spinner
             imageContainer.classList.add('loading');
             
-            // Set source to trigger load
-            img.src = imagePath;
-
-            // Use decode() API for smoother rendering
-            // This decodes the image before displaying it, reducing jank
-            img.decode()
-              .then(() => {
-                // Image decoded successfully, now show it
-                imageContainer.classList.remove('loading');
-                img.classList.add('loaded');
-              })
-              .catch(() => {
-                // Fallback if decode() fails - just show the image
-                imageContainer.classList.remove('loading');
-                img.classList.add('loaded');
-              });
+            // Use onload for faster perceived performance
+            img.onload = () => {
+              // Remove loading state and show image
+              imageContainer.classList.remove('loading');
+              img.classList.add('loaded');
+            };
 
             img.onerror = () => {
               imageContainer.classList.remove('loading');
               loadingEl.textContent = 'Failed to load image';
               loadingEl.style.display = 'block';
             };
+            
+            // Set source to trigger load
+            img.src = imagePath;
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
