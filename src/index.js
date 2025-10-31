@@ -301,7 +301,9 @@ async function serveMainPage() {
           position: relative;
           width: 100%;
           max-width: 900px;
-          height: 85vh;
+          min-height: 300px;
+          max-height: 85vh;
+          height: auto;
           margin: 0 auto 0.75rem;
           background: #f5f5f5;
           border-radius: 12px;
@@ -312,15 +314,41 @@ async function serveMainPage() {
           justify-content: center;
         }
 
+        .image-container::before {
+          content: "";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 40px;
+          height: 40px;
+          margin: -20px 0 0 -20px;
+          border: 3px solid #f3f3f3;
+          border-top: 3px solid #555;
+          border-radius: 50%;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+          animation: spin 1s linear infinite;
+        }
+
+        .image-container.loading::before {
+          opacity: 1;
+        }
+
+        @keyframes spin {
+          0% { transform: translate(-50%, -50%) rotate(0deg); }
+          100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
         #randomImage {
           max-width: 100%;
-          max-height: 100%;
+          max-height: 85vh;
           width: auto;
           height: auto;
           object-fit: contain;
           opacity: 0;
           transition: opacity 0.3s ease-in-out;
           display: block;
+          will-change: opacity;
         }
 
         #randomImage.loaded {
@@ -331,8 +359,13 @@ async function serveMainPage() {
         @media (max-width: 768px) {
           .image-container {
             width: 95vw;
-            height: 60vh;
+            min-height: 250px;
+            max-height: 60vh;
             margin-bottom: 0.5rem;
+          }
+
+          #randomImage {
+            max-height: 60vh;
           }
         }
 
@@ -340,8 +373,13 @@ async function serveMainPage() {
         @media (min-width: 769px) and (max-width: 1200px) {
           .image-container {
             width: 90vw;
-            height: 70vh;
+            min-height: 300px;
+            max-height: 70vh;
             max-width: 800px;
+          }
+
+          #randomImage {
+            max-height: 70vh;
           }
         }
 
@@ -349,8 +387,13 @@ async function serveMainPage() {
         @media (min-width: 1201px) {
           .image-container {
             width: 85vw;
-            height: 80vh;
+            min-height: 350px;
+            max-height: 80vh;
             max-width: 1200px;
+          }
+
+          #randomImage {
+            max-height: 80vh;
           }
         }
 
@@ -993,18 +1036,31 @@ async function serveMainPage() {
               : \`/images/\${data.filename}\`;
             const tempImg = new Image();
 
+            // Add loading state immediately
+            imageContainer.classList.add('loading');
+            
             tempImg.onload = () => {
+              // Set the image source and alt text
               img.src = tempImg.src;
               img.alt = data.alt_text || 'Random cute image';
-              loadingEl.style.display = 'none';
-
+              
+              // Use requestAnimationFrame for smoother transitions
               requestAnimationFrame(() => {
+                // Remove loading state first
+                imageContainer.classList.remove('loading');
+                
+                // Force a reflow to ensure transitions work properly
+                void img.offsetWidth;
+                
+                // Show the image
                 img.classList.add('loaded');
               });
             };
 
             tempImg.onerror = () => {
+              imageContainer.classList.remove('loading');
               loadingEl.textContent = 'Failed to load image';
+              loadingEl.style.display = 'block';
             };
 
             tempImg.src = imagePath;
