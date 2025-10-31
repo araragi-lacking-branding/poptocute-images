@@ -25,15 +25,13 @@
       position: relative;
       width: 100%;
       max-width: 900px;
+      max-height: 85vh;
       margin: 0 auto 0.75rem;
       background: #f5f5f5;
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 6px 30px rgba(0,0,0,.15);
       min-height: 300px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
 
     #randomImage {
@@ -50,6 +48,7 @@
     @media (max-width: 768px) {
       .image-container {
         max-width: 95vw;
+        max-height: 70vh;
         min-height: 250px;
         margin-bottom: 0.5rem;
       }
@@ -63,6 +62,7 @@
     @media (min-width: 769px) and (max-width: 1200px) {
       .image-container {
         max-width: 700px;
+        max-height: 80vh;
       }
 
       #randomImage {
@@ -74,6 +74,7 @@
     @media (min-width: 1201px) {
       .image-container {
         max-width: 1000px;
+        max-height: 90vh;
       }
 
       #randomImage {
@@ -655,12 +656,6 @@
       const tagPreview = document.getElementById('tagPreview');
       const expandBtn = document.getElementById('expandBtn');
       const metadataContent = document.getElementById('metadataContent');
-
-      // Set container aspect ratio based on image dimensions
-      if (mockData.width && mockData.height) {
-        const aspectRatio = mockData.width / mockData.height;
-        imageContainer.style.aspectRatio = aspectRatio.toString();
-      }
 
       // Build tag preview (show top 5 tags)
       tagPreview.innerHTML = '';
