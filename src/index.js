@@ -335,7 +335,6 @@ async function serveMainPage() {
           max-width: 900px;
           min-height: 300px;
           max-height: 85vh;
-          height: auto;
           margin: 0 auto 0.75rem;
           background: #f5f5f5;
           border-radius: 12px;
@@ -374,7 +373,6 @@ async function serveMainPage() {
         #randomImage {
           max-width: 100%;
           max-height: 85vh;
-          width: auto;
           height: auto;
           object-fit: contain;
           opacity: 0;
@@ -1095,6 +1093,10 @@ async function serveMainPage() {
               // This tells the browser to reserve the correct space
               img.width = data.width;
               img.height = data.height;
+              
+              // Set aspect ratio on container to prevent resize
+              const aspectRatio = data.width / data.height;
+              imageContainer.style.aspectRatio = aspectRatio.toString();
             }
 
             // Set alt text immediately
