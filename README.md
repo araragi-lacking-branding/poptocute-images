@@ -1,5 +1,5 @@
 # Hands-off AI Building of an Application as Ethics, Compliance, and Security Exploration
-**it's all pretty sily, so bear with me. You'll see where the robot starts talking.**
+**it's all pretty silly, so bear with me. You'll see where the robot starts talking.**
 
 The "simple" goal of this project is to build a site reminiscent of 2000s internet - niche, singular if broad focus, and minimal visual clutter.
 Like many of the folks I grew up with then, it'll be strung together with spaghetti code and other people's work, based on suggestions from large groups of people on the internet. <br></br>
