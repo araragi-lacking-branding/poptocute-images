@@ -316,24 +316,54 @@ async function serveMainPage() {
           position: relative;
           width: 100%;
           max-width: 900px;
+          min-height: 300px;
           max-height: 85vh;
+          height: auto;
           margin: 0 auto 0.75rem;
           background: #f5f5f5;
           border-radius: 12px;
           overflow: hidden;
           box-shadow: 0 6px 30px rgba(0,0,0,.15);
-          /* Start with a reasonable min-height to prevent layout shift */
-          min-height: 300px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .image-container::before {
+          content: "";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 40px;
+          height: 40px;
+          margin: -20px 0 0 -20px;
+          border: 3px solid #f3f3f3;
+          border-top: 3px solid #555;
+          border-radius: 50%;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+          animation: spin 1s linear infinite;
+        }
+
+        .image-container.loading::before {
+          opacity: 1;
+        }
+
+        @keyframes spin {
+          0% { transform: translate(-50%, -50%) rotate(0deg); }
+          100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
         #randomImage {
-          width: 100%;
-          height: auto;
+          max-width: 100%;
           max-height: 85vh;
+          width: auto;
+          height: auto;
           object-fit: contain;
           opacity: 0;
           transition: opacity 0.3s ease-in-out;
           display: block;
+          will-change: opacity;
         }
 
         #randomImage.loaded {
@@ -343,38 +373,42 @@ async function serveMainPage() {
         /* Mobile optimizations */
         @media (max-width: 768px) {
           .image-container {
-            max-width: 95vw;
-            max-height: 70vh;
+            width: 95vw;
             min-height: 250px;
+            max-height: 60vh;
             margin-bottom: 0.5rem;
           }
 
           #randomImage {
-            max-height: 70vh;
+            max-height: 60vh;
           }
         }
 
         /* Tablet/medium screens */
         @media (min-width: 769px) and (max-width: 1200px) {
           .image-container {
-            max-width: 700px;
-            max-height: 80vh;
+            width: 90vw;
+            min-height: 300px;
+            max-height: 70vh;
+            max-width: 800px;
           }
 
           #randomImage {
-            max-height: 80vh;
+            max-height: 70vh;
           }
         }
 
         /* Large desktop screens */
         @media (min-width: 1201px) {
           .image-container {
-            max-width: 1000px;
-            max-height: 90vh;
+            width: 85vw;
+            min-height: 350px;
+            max-height: 80vh;
+            max-width: 1200px;
           }
 
           #randomImage {
-            max-height: 90vh;
+            max-height: 80vh;
           }
         }
 
@@ -384,7 +418,7 @@ async function serveMainPage() {
           bottom: 0;
           left: 0;
           right: 0;
-          background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+          background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.5) 50%, transparent);
           padding: 2rem 1rem 1rem;
           opacity: 0;
           transform: translateY(10px);
@@ -392,11 +426,20 @@ async function serveMainPage() {
           pointer-events: none;
         }
 
-        .image-container:hover .tag-overlay,
-        .image-container:focus-within .tag-overlay {
+        .tag-overlay.visible {
           opacity: 1;
           transform: translateY(0);
           pointer-events: auto;
+        }
+
+        /* Desktop hover behavior */
+        @media (hover: hover) {
+          .image-container:hover .tag-overlay,
+          .image-container:focus-within .tag-overlay {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+          }
         }
 
         .tag-preview {
@@ -723,17 +766,58 @@ async function serveMainPage() {
         /* Responsive adjustments */
         @media (max-width: 600px) {
           .metadata-panel {
-            max-height: 70vh;
+            max-height: 85vh;
             padding: 1rem;
+            border-radius: 16px 16px 0 0;
+          }
+
+          .metadata-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 0.5rem 0;
+            margin-bottom: 0.75rem;
+            z-index: 2;
           }
 
           .tag-preview {
-            gap: 0.35rem;
+            gap: 0.4rem;
           }
 
-          .tag, .expand-btn {
-            font-size: 0.75rem;
-            padding: 0.2rem 0.6rem;
+          .tag {
+            font-size: 0.8rem;
+            padding: 0.35rem 0.75rem;
+          }
+
+          .expand-btn {
+            font-size: 0.85rem;
+            padding: 0.4rem 0.8rem;
+            margin-top: 0.25rem;
+          }
+          
+          /* Better touch targets */
+          .close-btn {
+            padding: 0.5rem;
+            margin: -0.5rem;
+            font-size: 1.75rem;
+          }
+        }
+
+        /* Tablet-specific adjustments */
+        @media (min-width: 601px) and (max-width: 1024px) {
+          .metadata-panel {
+            max-height: 75vh;
+            padding: 1.25rem;
+            border-radius: 20px 20px 0 0;
+          }
+
+          .tag-preview {
+            gap: 0.45rem;
+          }
+
+          .tag {
+            font-size: 0.85rem;
+            padding: 0.3rem 0.8rem;
           }
         }
 
@@ -919,6 +1003,37 @@ async function serveMainPage() {
           const expandBtn = document.getElementById('expandBtn');
           const metadataContent = document.getElementById('metadataContent');
 
+          // Double tap detection for mobile
+          let lastTap = 0;
+          let tapTimeout;
+
+          imageContainer.addEventListener('touchend', (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            
+            clearTimeout(tapTimeout);
+            
+            if (tapLength < 500 && tapLength > 0) {
+              // Double tap detected
+              e.preventDefault();
+              tagOverlay.classList.toggle('visible');
+            } else {
+              // Single tap
+              tapTimeout = setTimeout(() => {
+                lastTap = 0;
+              }, 500);
+            }
+            
+            lastTap = currentTime;
+          });
+
+          // Hide overlay when tapping elsewhere
+          document.addEventListener('touchend', (e) => {
+            if (!imageContainer.contains(e.target) && tagOverlay.classList.contains('visible')) {
+              tagOverlay.classList.remove('visible');
+            }
+          });
+
           try {
             const response = await fetch('/api/random', {cache: 'default'});
             if (!response.ok) throw new Error('Failed to fetch image');
@@ -936,18 +1051,31 @@ async function serveMainPage() {
               : \`/images/\${data.filename}\`;
             const tempImg = new Image();
 
+            // Add loading state immediately
+            imageContainer.classList.add('loading');
+            
             tempImg.onload = () => {
+              // Set the image source and alt text
               img.src = tempImg.src;
               img.alt = data.alt_text || 'Random cute image';
-              loadingEl.style.display = 'none';
-
+              
+              // Use requestAnimationFrame for smoother transitions
               requestAnimationFrame(() => {
+                // Remove loading state first
+                imageContainer.classList.remove('loading');
+                
+                // Force a reflow to ensure transitions work properly
+                void img.offsetWidth;
+                
+                // Show the image
                 img.classList.add('loaded');
               });
             };
 
             tempImg.onerror = () => {
+              imageContainer.classList.remove('loading');
               loadingEl.textContent = 'Failed to load image';
+              loadingEl.style.display = 'block';
             };
 
             tempImg.src = imagePath;
