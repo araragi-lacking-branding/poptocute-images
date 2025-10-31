@@ -909,7 +909,7 @@ async function serveMainPage() {
           const metadataContent = document.getElementById('metadataContent');
 
           try {
-            // Use default cache behavior for API call
+            // Fetch random image - server returns no-cache to ensure fresh results
             const response = await fetch('/api/random', {
               headers: {
                 'Accept': 'application/json'
