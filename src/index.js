@@ -309,11 +309,28 @@ async function serveMainPage() {
           margin: 0;
           font-family: "Heisei Mincho", "MS Mincho", "SimSun", serif;
           background: #fff;
+          overflow-y: auto;
+        }
+
+        body {
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh;
+          padding: 1rem;
+        }
+
+        .main-content {
+          flex: 1;
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
-          padding: 1rem;
+          max-width: 100%;
+        }
+
+        .footer-content {
+          margin-top: auto;
+          padding-top: 1rem;
         }
 
         .image-container {
@@ -322,7 +339,6 @@ async function serveMainPage() {
           max-width: 900px;
           min-height: 300px;
           max-height: 85vh;
-          height: auto;
           margin: 0 auto 0.75rem;
           background: #f5f5f5;
           border-radius: 12px;
@@ -345,7 +361,7 @@ async function serveMainPage() {
           border-top: 3px solid #555;
           border-radius: 50%;
           opacity: 0;
-          transition: opacity 0.2s ease;
+          transition: opacity 0.2s ease 0.3s;
           animation: spin 1s linear infinite;
         }
 
@@ -361,17 +377,18 @@ async function serveMainPage() {
         #randomImage {
           max-width: 100%;
           max-height: 85vh;
-          width: auto;
           height: auto;
           object-fit: contain;
           opacity: 0;
-          transition: opacity 0.3s ease-in-out;
+          visibility: hidden;
+          transition: opacity 0.2s ease-out, visibility 0s linear 0.2s;
           display: block;
-          will-change: opacity;
         }
 
         #randomImage.loaded {
           opacity: 1;
+          visibility: visible;
+          transition: opacity 0.2s ease-out, visibility 0s linear 0s;
         }
 
         /* Mobile optimizations */
@@ -628,11 +645,28 @@ async function serveMainPage() {
           text-decoration: underline;
         }
 
+        /* Skeleton loading animation */
+        .skeleton-text {
+          display: inline-block;
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: skeleton-loading 1.5s ease-in-out infinite;
+          border-radius: 4px;
+          color: transparent;
+          user-select: none;
+        }
+
+        @keyframes skeleton-loading {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+
         /* Artist Credit Display */
         .artist-credit {
           text-align: center;
-          margin: 1rem auto 0.5rem;
+          margin: 0 auto 0.5rem;
           max-width: 600px;
+          min-height: 80px;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
@@ -717,7 +751,7 @@ async function serveMainPage() {
           text-align: center;
           max-width: 600px;
           line-height: 1.4;
-          margin-top: 0.75rem;
+          margin: 0.75rem auto 0;
           opacity: 0.8;
         }
 
@@ -725,7 +759,7 @@ async function serveMainPage() {
           font-size: 0.75rem;
           color: #999;
           text-align: center;
-          margin-top: 0.5rem;
+          margin: 0.5rem auto 0;
         }
 
         .footer-link a {
@@ -745,6 +779,7 @@ async function serveMainPage() {
           transform: translate(-50%, -50%);
           color: #666;
           font-size: 0.9rem;
+          display: none;
         }
 
         /* Accessibility - High Contrast Mode */
@@ -843,18 +878,40 @@ async function serveMainPage() {
       </style>
     </head>
     <body>
-      <div class="image-container" role="img" aria-label="Random cute image">
-        <div class="loading" aria-live="polite">Loading...</div>
-        <img id="randomImage" alt="" loading="eager" fetchpriority="high" />
+      <div class="main-content">
+        <div class="image-container" role="img" aria-label="Random cute image">
+          <div class="loading" aria-live="polite">Loading...</div>
+          <img id="randomImage" alt="" loading="eager" />
 
-        <div class="tag-overlay" id="tagOverlay" aria-label="Image tags">
-          <div class="tag-preview" id="tagPreview" role="navigation" aria-label="Quick tags"></div>
-          <button
-            class="expand-btn"
-            id="expandBtn"
-            aria-expanded="false"
-            aria-controls="metadataPanel"
-          >View all</button>
+          <div class="tag-overlay" id="tagOverlay" aria-label="Image tags">
+            <div class="tag-preview" id="tagPreview" role="navigation" aria-label="Quick tags"></div>
+            <button
+              class="expand-btn"
+              id="expandBtn"
+              aria-expanded="false"
+              aria-controls="metadataPanel"
+            >View all</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-content">
+        <div class="artist-credit" id="artistCredit">
+          <div class="artist-credit-label">Artist</div>
+          <div class="artist-credit-name" id="artistName">
+            <span class="skeleton-text">Loading artist...</span>
+          </div>
+          <div class="artist-credit-social" id="artistSocial">
+            <span class="skeleton-text">Loading details...</span>
+          </div>
+        </div>
+
+        <div class="disclaimer">
+          This website displays images that do not belong to us. We are working on adding proper attribution and reporting features.
+        </div>
+
+        <div class="footer-link">
+          <a href="https://github.com/araragi-lacking-branding/poptocute-images" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
       </div>
 
@@ -872,20 +929,6 @@ async function serveMainPage() {
         </div>
         <div id="metadataContent"></div>
       </aside>
-
-      <div class="artist-credit" id="artistCredit">
-        <div class="artist-credit-label">Artist</div>
-        <div class="artist-credit-name" id="artistName"></div>
-        <div class="artist-credit-social" id="artistSocial"></div>
-      </div>
-
-      <div class="disclaimer">
-        This website displays images that do not belong to us. We are working on adding proper attribution and reporting features.
-      </div>
-
-      <div class="footer-link">
-        <a href="https://github.com/araragi-lacking-branding/poptocute-images" target="_blank" rel="noopener noreferrer">GitHub</a>
-      </div>
 
       <script>
         // HTML escape utility for security
@@ -1053,44 +1096,45 @@ async function serveMainPage() {
               throw new Error('No image available');
             }
 
-            // Load image with WebP optimization via Cloudflare Image Resizing
-            // Handle filenames that may or may not include 'images/' prefix
-            const imageFilename = data.filename.startsWith('images/')
-              ? data.filename
-              : \`images/\${data.filename}\`;
-            
-            // Use Cloudflare Image Resizing for WebP conversion and optimization
-            const imagePath = \`/cdn-cgi/image/format=auto,quality=85,width=1200/\${imageFilename}\`;
-            const tempImg = new Image();
+            // Set image dimensions BEFORE loading to prevent layout shift
+            if (data.width && data.height) {
+              // Set explicit width and height attributes
+              // This tells the browser to reserve the correct space
+              img.width = data.width;
+              img.height = data.height;
+              
+              // Set aspect ratio on container to prevent resize
+              const aspectRatio = data.width / data.height;
+              imageContainer.style.aspectRatio = aspectRatio.toString();
+            }
 
-            // Add loading state immediately
+            // Set alt text immediately
+            img.alt = data.alt_text || 'Random cute image';
+
+            // Load image
+            // Handle filenames that may or may not include 'images/' prefix
+            const imagePath = data.filename.startsWith('images/')
+              ? \`/\${data.filename}\`
+              : \`/images/\${data.filename}\`;
+
+            // Add loading state with delay for spinner
             imageContainer.classList.add('loading');
             
-            tempImg.onload = () => {
-              // Set the image source and alt text
-              img.src = tempImg.src;
-              img.alt = data.alt_text || 'Random cute image';
-              
-              // Use requestAnimationFrame for smoother transitions
-              requestAnimationFrame(() => {
-                // Remove loading state first
-                imageContainer.classList.remove('loading');
-                
-                // Force a reflow to ensure transitions work properly
-                void img.offsetWidth;
-                
-                // Show the image
-                img.classList.add('loaded');
-              });
+            // Use onload for faster perceived performance
+            img.onload = () => {
+              // Remove loading state and show image
+              imageContainer.classList.remove('loading');
+              img.classList.add('loaded');
             };
 
-            tempImg.onerror = () => {
+            img.onerror = () => {
               imageContainer.classList.remove('loading');
               loadingEl.textContent = 'Failed to load image';
               loadingEl.style.display = 'block';
             };
-
-            tempImg.src = imagePath;
+            
+            // Set source to trigger load
+            img.src = imagePath;
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
@@ -1133,7 +1177,7 @@ async function serveMainPage() {
               if (data.credit_url) {
                 artistName.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">\${escapeHtml(data.credit_name)}</a>\`;
               } else {
-                artistName.textContent = data.credit_name;
+                artistName.innerHTML = escapeHtml(data.credit_name);
               }
 
               // Build social media link - only if available
@@ -1143,7 +1187,7 @@ async function serveMainPage() {
               } else if (data.credit_url) {
                 artistSocial.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">View Profile</a>\`;
               } else {
-                artistSocial.textContent = '';
+                artistSocial.innerHTML = '';
               }
             }
 
