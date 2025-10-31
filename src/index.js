@@ -284,9 +284,6 @@ async function serveMainPage() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>*cute* and *pop*</title>
       <link rel="icon" type="image/x-icon" href="favicon.ico">
-      <!-- Performance optimizations: Resource hints -->
-      <link rel="preconnect" href="https://cutetopop.com">
-      <link rel="dns-prefetch" href="https://cutetopop.com">
       <style>
         * {
           box-sizing: border-box;
