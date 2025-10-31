@@ -301,20 +301,22 @@ async function serveMainPage() {
           position: relative;
           width: 100%;
           max-width: 900px;
-          max-height: 85vh;
+          height: 85vh;
           margin: 0 auto 0.75rem;
           background: #f5f5f5;
           border-radius: 12px;
           overflow: hidden;
           box-shadow: 0 6px 30px rgba(0,0,0,.15);
-          /* Start with a reasonable min-height to prevent layout shift */
-          min-height: 300px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         #randomImage {
-          width: 100%;
+          max-width: 100%;
+          max-height: 100%;
+          width: auto;
           height: auto;
-          max-height: 85vh;
           object-fit: contain;
           opacity: 0;
           transition: opacity 0.3s ease-in-out;
@@ -328,38 +330,27 @@ async function serveMainPage() {
         /* Mobile optimizations */
         @media (max-width: 768px) {
           .image-container {
-            max-width: 95vw;
-            max-height: 70vh;
-            min-height: 250px;
+            width: 95vw;
+            height: 60vh;
             margin-bottom: 0.5rem;
-          }
-
-          #randomImage {
-            max-height: 70vh;
           }
         }
 
         /* Tablet/medium screens */
         @media (min-width: 769px) and (max-width: 1200px) {
           .image-container {
-            max-width: 700px;
-            max-height: 80vh;
-          }
-
-          #randomImage {
-            max-height: 80vh;
+            width: 90vw;
+            height: 70vh;
+            max-width: 800px;
           }
         }
 
         /* Large desktop screens */
         @media (min-width: 1201px) {
           .image-container {
-            max-width: 1000px;
-            max-height: 90vh;
-          }
-
-          #randomImage {
-            max-height: 90vh;
+            width: 85vw;
+            height: 80vh;
+            max-width: 1200px;
           }
         }
 
@@ -369,7 +360,7 @@ async function serveMainPage() {
           bottom: 0;
           left: 0;
           right: 0;
-          background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+          background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.5) 50%, transparent);
           padding: 2rem 1rem 1rem;
           opacity: 0;
           transform: translateY(10px);
@@ -377,11 +368,20 @@ async function serveMainPage() {
           pointer-events: none;
         }
 
-        .image-container:hover .tag-overlay,
-        .image-container:focus-within .tag-overlay {
+        .tag-overlay.visible {
           opacity: 1;
           transform: translateY(0);
           pointer-events: auto;
+        }
+
+        /* Desktop hover behavior */
+        @media (hover: hover) {
+          .image-container:hover .tag-overlay,
+          .image-container:focus-within .tag-overlay {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+          }
         }
 
         .tag-preview {
@@ -708,17 +708,58 @@ async function serveMainPage() {
         /* Responsive adjustments */
         @media (max-width: 600px) {
           .metadata-panel {
-            max-height: 70vh;
+            max-height: 85vh;
             padding: 1rem;
+            border-radius: 16px 16px 0 0;
+          }
+
+          .metadata-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 0.5rem 0;
+            margin-bottom: 0.75rem;
+            z-index: 2;
           }
 
           .tag-preview {
-            gap: 0.35rem;
+            gap: 0.4rem;
           }
 
-          .tag, .expand-btn {
-            font-size: 0.75rem;
-            padding: 0.2rem 0.6rem;
+          .tag {
+            font-size: 0.8rem;
+            padding: 0.35rem 0.75rem;
+          }
+
+          .expand-btn {
+            font-size: 0.85rem;
+            padding: 0.4rem 0.8rem;
+            margin-top: 0.25rem;
+          }
+          
+          /* Better touch targets */
+          .close-btn {
+            padding: 0.5rem;
+            margin: -0.5rem;
+            font-size: 1.75rem;
+          }
+        }
+
+        /* Tablet-specific adjustments */
+        @media (min-width: 601px) and (max-width: 1024px) {
+          .metadata-panel {
+            max-height: 75vh;
+            padding: 1.25rem;
+            border-radius: 20px 20px 0 0;
+          }
+
+          .tag-preview {
+            gap: 0.45rem;
+          }
+
+          .tag {
+            font-size: 0.85rem;
+            padding: 0.3rem 0.8rem;
           }
         }
 
@@ -903,6 +944,37 @@ async function serveMainPage() {
           const tagPreview = document.getElementById('tagPreview');
           const expandBtn = document.getElementById('expandBtn');
           const metadataContent = document.getElementById('metadataContent');
+
+          // Double tap detection for mobile
+          let lastTap = 0;
+          let tapTimeout;
+
+          imageContainer.addEventListener('touchend', (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            
+            clearTimeout(tapTimeout);
+            
+            if (tapLength < 500 && tapLength > 0) {
+              // Double tap detected
+              e.preventDefault();
+              tagOverlay.classList.toggle('visible');
+            } else {
+              // Single tap
+              tapTimeout = setTimeout(() => {
+                lastTap = 0;
+              }, 500);
+            }
+            
+            lastTap = currentTime;
+          });
+
+          // Hide overlay when tapping elsewhere
+          document.addEventListener('touchend', (e) => {
+            if (!imageContainer.contains(e.target) && tagOverlay.classList.contains('visible')) {
+              tagOverlay.classList.remove('visible');
+            }
+          });
 
           try {
             const response = await fetch('/api/random', {cache: 'default'});
