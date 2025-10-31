@@ -213,7 +213,11 @@ async function getRandomImage(env, corsHeaders) {
       ...result,
       tags: tags.results || []
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
     });
   } catch (error) {
     console.error('Error fetching random image:', error);
@@ -841,7 +845,7 @@ async function serveMainPage() {
     <body>
       <div class="image-container" role="img" aria-label="Random cute image">
         <div class="loading" aria-live="polite">Loading...</div>
-        <img id="randomImage" alt="" loading="eager" />
+        <img id="randomImage" alt="" loading="eager" fetchpriority="high" />
 
         <div class="tag-overlay" id="tagOverlay" aria-label="Image tags">
           <div class="tag-preview" id="tagPreview" role="navigation" aria-label="Quick tags"></div>
@@ -1035,7 +1039,12 @@ async function serveMainPage() {
           });
 
           try {
-            const response = await fetch('/api/random', {cache: 'default'});
+            // Fetch random image - server returns no-cache to ensure fresh results
+            const response = await fetch('/api/random', {
+              headers: {
+                'Accept': 'application/json'
+              }
+            });
             if (!response.ok) throw new Error('Failed to fetch image');
 
             const data = await response.json();
@@ -1044,11 +1053,14 @@ async function serveMainPage() {
               throw new Error('No image available');
             }
 
-            // Load image
+            // Load image with WebP optimization via Cloudflare Image Resizing
             // Handle filenames that may or may not include 'images/' prefix
-            const imagePath = data.filename.startsWith('images/')
-              ? \`/\${data.filename}\`
-              : \`/images/\${data.filename}\`;
+            const imageFilename = data.filename.startsWith('images/')
+              ? data.filename
+              : \`images/\${data.filename}\`;
+            
+            // Use Cloudflare Image Resizing for WebP conversion and optimization
+            const imagePath = \`/cdn-cgi/image/format=auto,quality=85,width=1200/\${imageFilename}\`;
             const tempImg = new Image();
 
             // Add loading state immediately
@@ -1186,7 +1198,7 @@ async function serveMainPage() {
           }
         });
 
-        // Initialize
+        // Initialize immediately - start loading before DOM is fully ready
         loadRandomImage();
       </script>
     </body>
