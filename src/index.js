@@ -1276,9 +1276,10 @@ async function serveMainPage() {
               // Show "No tags" message when no tags are available
               const noTagsMsg = document.createElement('span');
               noTagsMsg.textContent = 'No Current Tags';
-              noTagsMsg.style.color = 'rgba(255, 255, 255, 0.7)';
-              noTagsMsg.style.fontSize = '0.85rem';
-              noTagsMsg.style.fontStyle = 'italic';
+              noTagsMsg.style.color = 'rgba(255, 255, 255, 0.9)';
+              noTagsMsg.style.fontSize = '0.9rem';
+              noTagsMsg.style.fontWeight = '600';
+              noTagsMsg.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
               tagPreview.appendChild(noTagsMsg);
               expandBtn.style.display = 'none';
             }
