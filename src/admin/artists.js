@@ -81,23 +81,28 @@ export async function getArtistById(env, artistId) {
     SELECT 
       a.*,
       COUNT(DISTINCT c.id) AS credits_count,
-      COUNT(DISTINCT i.id) AS images_count,
-      GROUP_CONCAT(DISTINCT t.name) AS creator_tags
+      COUNT(DISTINCT i.id) AS images_count
     FROM artists a
     LEFT JOIN credits c ON a.id = c.artist_id
     LEFT JOIN images i ON c.id = i.credit_id AND i.status = 'active'
-    LEFT JOIN artist_tags at ON a.id = at.artist_id
-    LEFT JOIN tags t ON at.tag_id = t.id
     WHERE a.id = ?
     GROUP BY a.id
   `).bind(artistId).first();
   
   if (!result) return null;
   
+  // Get associated tags
+  const tags = await env.DB.prepare(`
+    SELECT t.id, t.name, t.display_name
+    FROM tags t
+    INNER JOIN artist_tags at ON t.id = at.tag_id
+    WHERE at.artist_id = ?
+  `).bind(artistId).all();
+  
   return {
     ...result,
     other_links: result.other_links ? JSON.parse(result.other_links) : [],
-    creator_tags: result.creator_tags ? result.creator_tags.split(',') : []
+    tags: tags.results || []
   };
 }
 
@@ -179,8 +184,46 @@ export async function createArtist(env, artistData) {
   if (!result.success) {
     throw new Error('Failed to create artist');
   }
+
+  const artistId = result.meta.last_row_id;
+
+  // Auto-create and link a creator tag
+  try {
+    // Check if creator tag already exists
+    const creatorCategory = await env.DB.prepare(
+      `SELECT id FROM tag_categories WHERE name = 'creator'`
+    ).first();
+
+    if (creatorCategory) {
+      const existingTag = await env.DB.prepare(
+        `SELECT id FROM tags WHERE name = ? AND category_id = ?`
+      ).bind(name, creatorCategory.id).first();
+
+      let tagId;
+      if (existingTag) {
+        tagId = existingTag.id;
+      } else {
+        // Create creator tag
+        const tagResult = await env.DB.prepare(`
+          INSERT INTO tags (name, display_name, category_id)
+          VALUES (?, ?, ?)
+        `).bind(name, display_name || name, creatorCategory.id).run();
+        
+        tagId = tagResult.meta.last_row_id;
+      }
+
+      // Link artist to creator tag
+      await env.DB.prepare(`
+        INSERT OR IGNORE INTO artist_tags (artist_id, tag_id)
+        VALUES (?, ?)
+      `).bind(artistId, tagId).run();
+    }
+  } catch (error) {
+    console.error('Failed to create/link creator tag:', error);
+    // Don't fail the artist creation if tag creation fails
+  }
   
-  return await getArtistById(env, result.meta.last_row_id);
+  return await getArtistById(env, artistId);
 }
 
 /**
@@ -240,6 +283,23 @@ export async function updateArtist(env, artistId, updates) {
   
   if (!result.success) {
     throw new Error('Failed to update artist');
+  }
+
+  // If display_name was updated, sync it to the creator tag
+  if (updates.display_name) {
+    try {
+      await env.DB.prepare(`
+        UPDATE tags
+        SET display_name = ?
+        WHERE id IN (
+          SELECT tag_id FROM artist_tags WHERE artist_id = ?
+        ) AND category_id = (
+          SELECT id FROM tag_categories WHERE name = 'creator'
+        )
+      `).bind(updates.display_name, artistId).run();
+    } catch (error) {
+      console.error('Failed to sync display_name to creator tag:', error);
+    }
   }
   
   return await getArtistById(env, artistId);
