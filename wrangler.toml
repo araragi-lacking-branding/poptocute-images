@@ -36,3 +36,8 @@ preview_id = "112191adc1ea4acb85f38d80370200f8"
 binding = "IMAGES"
 bucket_name = "cutetopop-images"
 preview_bucket_name = "cutetopop-images-preview"
+
+# Cron Triggers for scheduled tasks
+# Daily KV cache sync at 3 AM UTC
+[triggers]
+crons = ["0 3 * * *"]
