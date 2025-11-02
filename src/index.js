@@ -1327,7 +1327,10 @@ async function serveMainPage(env) {
   `, {
     headers: {
       'Content-Type': 'text/html;charset=UTF-8',
-      'Cache-Control': 'public, max-age=300'
+      // No caching - each response has unique random image data
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
     }
   });
 }
