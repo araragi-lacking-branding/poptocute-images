@@ -191,23 +191,7 @@ async function handleAPI(request, env, url) {
 
 async function getRandomImage(env, corsHeaders) {
   try {
-    // PERFORMANCE FIX: Two-step approach is much faster than ORDER BY RANDOM() with JOINs
-    // Step 1: Get a random ID only (no JOINs, very fast)
-    const randomIdResult = await env.DB.prepare(`
-      SELECT id FROM images 
-      WHERE status = 'active'
-      ORDER BY RANDOM()
-      LIMIT 1
-    `).first();
-    
-    if (!randomIdResult) {
-      return new Response(JSON.stringify({ error: 'No images available' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-    
-    // Step 2: Fetch full data for that specific ID (indexed lookup, very fast)
+    // Get random image - fast because no tag JOINs
     const result = await env.DB.prepare(`
       SELECT
         i.id,
@@ -222,16 +206,13 @@ async function getRandomImage(env, corsHeaders) {
         c.url AS credit_url,
         c.social_handle AS credit_social_handle,
         c.platform AS credit_platform,
-        c.license AS credit_license,
-        GROUP_CONCAT(t.name || ':' || COALESCE(t.display_name, t.name) || ':' || tc.name, '|') as tags_data
+        c.license AS credit_license
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
-      LEFT JOIN image_tags it ON i.id = it.image_id
-      LEFT JOIN tags t ON it.tag_id = t.id
-      LEFT JOIN tag_categories tc ON t.category_id = tc.id
-      WHERE i.id = ?
-      GROUP BY i.id
-    `).bind(randomIdResult.id).first();
+      WHERE i.status = 'active'
+      ORDER BY RANDOM()
+      LIMIT 1
+    `).first();
 
     if (!result) {
       return new Response(JSON.stringify({ error: 'No images available' }), {
@@ -240,24 +221,19 @@ async function getRandomImage(env, corsHeaders) {
       });
     }
 
-    // Parse tags from concatenated string
-    const tags = [];
-    if (result.tags_data) {
-      const tagParts = result.tags_data.split('|');
-      tagParts.forEach(part => {
-        const [name, display_name, category] = part.split(':');
-        if (name) {
-          tags.push({ name, display_name, category });
-        }
-      });
-    }
-    
-    // Remove tags_data from response
-    delete result.tags_data;
+    // Get tags separately - fast indexed lookup
+    const tagsResult = await env.DB.prepare(`
+      SELECT t.name, t.display_name, tc.name as category
+      FROM image_tags it
+      JOIN tags t ON it.tag_id = t.id
+      JOIN tag_categories tc ON t.category_id = tc.id
+      WHERE it.image_id = ?
+      ORDER BY tc.sort_order, t.name
+    `).bind(result.id).all();
 
     return new Response(JSON.stringify({
       ...result,
-      tags
+      tags: tagsResult.results || []
     }), {
       headers: { 
         ...corsHeaders, 
