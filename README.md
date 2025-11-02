@@ -50,6 +50,15 @@ A random image display site with metadata management, tagging, and attribution s
 - **Worker**: Cloudflare Workers (API + HTML serving + Admin UI)
 - **Deployment**: Cloudflare Pages with GitHub integration
 
+## Security
+
+- **Admin Access**: Protected by Cloudflare Access with email authentication
+  - All `/admin` and `/admin/*` routes require authentication
+  - Restricted to specific email allowlist
+  - No hardcoded credentials in repository
+- **Environment Variables**: Sensitive configuration in `.env` and `.dev.vars` (gitignored)
+- **Resource Security**: Cloudflare D1, R2, and KV bindings managed via Wrangler
+
 ## Current Status
 
 ✅ **Phase 1: Complete**
