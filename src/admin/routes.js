@@ -2,7 +2,7 @@
 // Admin API routes and authentication
 
 import { generateAdminUI } from './ui.js';
-import { handleSync } from './sync.js';
+import { handleSync, syncKVCache } from './sync.js';
 import { handleUpload } from './upload.js';
 import {
   getAllArtists,
@@ -100,6 +100,11 @@ async function handleAdminAPI(request, env, url) {
     if (path.match(/^\/images\/\d+$/) && method === 'GET') {
       const imageId = path.split('/').pop();
       return await getImageDetails(env, imageId, corsHeaders);
+    }
+
+    // GET /api/admin/images - Get all images (including hidden) for admin
+    if (path === '/images' && method === 'GET') {
+      return await getAllImagesAdmin(env, url, corsHeaders);
     }
 
     // PUT /api/admin/images/:id - Update image metadata
@@ -237,6 +242,51 @@ async function getAllTags(env, corsHeaders) {
   });
 
   return new Response(JSON.stringify(organized), { headers: corsHeaders });
+}
+
+// Get all images for admin (including hidden ones)
+async function getAllImagesAdmin(env, url, corsHeaders) {
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '1000'), 1000);
+  const offset = parseInt(url.searchParams.get('offset') || '0');
+
+  try {
+    const results = await env.DB.prepare(`
+      SELECT 
+        i.id,
+        i.filename,
+        i.alt_text,
+        i.status,
+        i.created_at,
+        c.name AS credit_name,
+        c.artist_id,
+        a.name AS artist_name,
+        a.display_name AS artist_display_name,
+        a.verified AS artist_verified
+      FROM images i
+      LEFT JOIN credits c ON i.credit_id = c.id
+      LEFT JOIN artists a ON c.artist_id = a.id
+      ORDER BY i.created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all();
+
+    return new Response(JSON.stringify({
+      images: results.results,
+      count: results.results.length,
+      limit,
+      offset
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error('Error fetching admin images:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
 }
 
 // Create new tag
@@ -445,40 +495,6 @@ async function updateImageMetadata(request, env, imageId, corsHeaders) {
     }), {
       status: 500,
       headers: corsHeaders
-    });
-  }
-}
-
-// Sync images list from D1 to KV cache
-async function syncKVCache(env, corsHeaders) {
-  try {
-    // Query D1 for all active images
-    const results = await env.DB.prepare(`
-      SELECT filename FROM images WHERE status = 'active'
-    `).all();
-    
-    const filenames = results.results.map(r => r.filename);
-    
-    // Write to KV
-    await env.IMAGES_CACHE.put('images-list', JSON.stringify(filenames), {
-      expirationTtl: 86400 // 24 hours
-    });
-    
-    return new Response(JSON.stringify({
-      success: true,
-      count: filenames.length,
-      message: `Successfully synced ${filenames.length} images to KV cache`
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    console.error('KV sync error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 }
@@ -745,7 +761,7 @@ async function handleUpdateImageStatus(request, env, imageId, corsHeaders) {
     `).bind(status, imageId).run();
 
     // Trigger sync to update KV cache
-    await syncKVCache(env, corsHeaders);
+    await syncKVCache(env);
 
     return new Response(JSON.stringify({
       success: true,
@@ -798,7 +814,7 @@ async function handleUpdateTagStatus(request, env, tagId, corsHeaders) {
     `).bind(status, tagId).run();
 
     // Trigger sync to update KV cache
-    await syncKVCache(env, corsHeaders);
+    await syncKVCache(env);
 
     return new Response(JSON.stringify({
       success: true,
@@ -853,7 +869,7 @@ async function handleUpdateArtistStatus(request, env, artistId, corsHeaders) {
     `).bind(status, artistId).run();
 
     // Trigger sync to update KV cache
-    await syncKVCache(env, corsHeaders);
+    await syncKVCache(env);
 
     return new Response(JSON.stringify({
       success: true,

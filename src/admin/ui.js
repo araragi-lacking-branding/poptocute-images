@@ -768,6 +768,8 @@ export function generateAdminUI(activeView = 'images') {
           
           <div class="image-info" id="image-info">
             <dl>
+              <dt>Image ID:</dt>
+              <dd id="info-image-id">—</dd>
               <dt>Filename:</dt>
               <dd id="info-filename">—</dd>
               <dt>Size:</dt>
@@ -1167,7 +1169,7 @@ export function generateAdminUI(activeView = 'images') {
 
         async function loadImageList() {
           try {
-            const response = await fetch('/api/images?limit=1000');
+            const response = await fetch('/api/admin/images?limit=1000');
             const data = await response.json();
             allImages = data.images;
           } catch (error) {
@@ -1186,6 +1188,7 @@ export function generateAdminUI(activeView = 'images') {
             const data = await response.json();
             
             document.getElementById('current-image').src = '/' + data.filename;
+            document.getElementById('info-image-id').textContent = data.id;
             document.getElementById('info-filename').textContent = data.filename;
             document.getElementById('info-size').textContent = formatFileSize(data.file_size);
             document.getElementById('info-dimensions').textContent = 
