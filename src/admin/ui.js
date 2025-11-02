@@ -1181,8 +1181,14 @@ export function generateAdminUI(activeView = 'images') {
 
         let selectedFiles = [];
         const MAX_FILES = 20;
+        let uploadInProgress = false;
         
-        document.getElementById('upload-area').addEventListener('click', function() {
+        document.getElementById('upload-area').addEventListener('click', function(e) {
+          // Don't trigger file picker if upload is in progress or showing results
+          if (uploadInProgress) {
+            e.stopPropagation();
+            return;
+          }
           document.getElementById('file-input').click();
         });
         
@@ -1223,10 +1229,13 @@ export function generateAdminUI(activeView = 'images') {
         async function uploadImages() {
           if (selectedFiles.length === 0) return;
           
+          uploadInProgress = true;
           document.getElementById('upload-preview').style.display = 'none';
           document.getElementById('upload-progress').style.display = 'block';
           
           var uploaded = 0;
+          var failed = [];
+          
           for (var i = 0; i < selectedFiles.length; i++) {
             document.getElementById('progress-fill').style.width = ((i / selectedFiles.length) * 100) + '%';
             document.getElementById('upload-status').textContent = 'Uploading ' + (i + 1) + ' of ' + selectedFiles.length;
@@ -1236,24 +1245,49 @@ export function generateAdminUI(activeView = 'images') {
             
             try {
               var res = await fetch('/api/admin/upload', { method: 'POST', body: formData });
-              if (res.ok) uploaded++;
+              if (res.ok) {
+                uploaded++;
+              } else {
+                var errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+                failed.push({
+                  filename: selectedFiles[i].name,
+                  error: errorData.error || 'Upload failed'
+                });
+              }
             } catch (e) { 
-              console.error('Upload error:', e); 
+              console.error('Upload error:', e);
+              failed.push({
+                filename: selectedFiles[i].name,
+                error: e.message || 'Network error'
+              });
             }
           }
           
           document.getElementById('progress-fill').style.width = '100%';
-          document.getElementById('upload-status').textContent = 'Uploaded ' + uploaded + ' of ' + selectedFiles.length + ' images';
+          
+          // Show detailed results
+          var statusText = 'Uploaded ' + uploaded + ' of ' + selectedFiles.length + ' images';
+          if (failed.length > 0) {
+            statusText += '\\n\\nFailed uploads:\\n' + failed.map(f => 
+              '• ' + f.filename + ': ' + f.error
+            ).join('\\n');
+          }
+          document.getElementById('upload-status').textContent = statusText;
+          document.getElementById('upload-status').style.whiteSpace = 'pre-line';
           
           await loadImageList();
           await loadStats();
           
+          // Reset after showing results (don't auto-hide if there were failures)
           setTimeout(function() {
-            cancelUpload();
+            selectedFiles = [];
+            document.getElementById('file-input').value = '';
             document.getElementById('upload-progress').style.display = 'none';
             document.getElementById('upload-placeholder').style.display = 'block';
             document.getElementById('progress-fill').style.width = '0%';
-          }, 2000);
+            document.getElementById('upload-status').style.whiteSpace = 'normal';
+            uploadInProgress = false;
+          }, failed.length > 0 ? 5000 : 2000);
         }
         async function syncDatabase() {
           const button = document.getElementById('sync-button');
