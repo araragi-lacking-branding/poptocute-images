@@ -304,6 +304,7 @@ async function serveMainPage() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>*cute* and *pop*</title>
       <link rel="icon" type="image/x-icon" href="favicon.ico">
+      <link rel="preconnect" href="https://cutetopop.com">
       <style>
         * {
           box-sizing: border-box;
@@ -886,7 +887,7 @@ async function serveMainPage() {
       <div class="main-content">
         <div class="image-container" role="img" aria-label="Random cute image">
           <div class="loading" aria-live="polite">Loading...</div>
-          <img id="randomImage" alt="" loading="eager" />
+          <img id="randomImage" alt="" loading="eager" fetchpriority="high" />
 
           <div class="tag-overlay" id="tagOverlay" aria-label="Image tags">
             <div class="tag-preview" id="tagPreview" role="navigation" aria-label="Quick tags"></div>
@@ -1087,12 +1088,16 @@ async function serveMainPage() {
           });
 
           try {
+            // Start image fetch ASAP with high priority
             // Fetch random image - server returns no-cache to ensure fresh results
-            const response = await fetch('/api/random', {
+            const fetchPromise = fetch('/api/random', {
               headers: {
                 'Accept': 'application/json'
-              }
+              },
+              priority: 'high'
             });
+            
+            const response = await fetchPromise;
             if (!response.ok) throw new Error('Failed to fetch image');
 
             const data = await response.json();
