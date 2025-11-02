@@ -821,6 +821,7 @@ export function generateAdminUI(activeView = 'images') {
             document.getElementById('stat-images').textContent = \`Images: \${stats.total_images}\`;
             document.getElementById('stat-tags').textContent = \`Tags: \${stats.total_tags}\`;
             document.getElementById('stat-credits').textContent = \`Credits: \${stats.credited_artists}\`;
+            document.getElementById('stat-artists').textContent = \`Artists: \${stats.total_artists}\`;
           } catch (error) {
             console.error('Failed to load stats:', error);
           }
@@ -1109,10 +1110,6 @@ export function generateAdminUI(activeView = 'images') {
             const response = await fetch('/api/admin/artists');
             const data = await response.json();
             allArtists = data.artists || data; // Handle both {artists: []} and [] responses
-            
-            // Update stats
-            const stats = await fetch('/api/stats').then(r => r.json());
-            document.getElementById('stat-artists').textContent = \`Artists: \${allArtists.length}\`;
             
             // Load creator tags for linking
             const tagsResponse = await fetch('/api/admin/tags');
