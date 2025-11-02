@@ -1,4 +1,5 @@
 import { handleAdminRequest } from './admin/routes.js';
+import { syncKVCache } from './admin/sync.js';
 
 // src/index.js - Worker with Image Transformations via fetch
 export default {
@@ -96,6 +97,23 @@ export default {
     
     return new Response('Not Found', { status: 404 });
   },
+
+  /**
+   * Scheduled event handler for Cron Triggers
+   * Runs daily sync at 3 AM UTC
+   */
+  async scheduled(event, env, ctx) {
+    console.log('Scheduled sync triggered at', new Date().toISOString());
+    
+    try {
+      // Sync KV cache with D1 data
+      const result = await syncKVCache(env);
+      console.log(`Scheduled sync completed: ${result.count} images synced at ${result.timestamp}`);
+    } catch (error) {
+      console.error('Scheduled sync failed:', error);
+      // Don't throw - we don't want to mark the scheduled event as failed
+    }
+  }
 };
 
 // ============================================
@@ -198,13 +216,21 @@ async function getRandomImage(env, corsHeaders) {
     // Get count from KV cache (updated periodically)
     let count = await env.IMAGES_CACHE.get('active-count', 'text');
     if (!count) {
-      // Fallback to DB query if cache miss
+      // Cache miss - likely first request after deployment
+      console.warn('KV cache miss - triggering sync');
+      
+      // Immediate fallback to DB query (don't block request)
       const countResult = await env.DB.prepare(`
         SELECT COUNT(*) as count FROM images WHERE status = 'active'
       `).first();
       count = countResult.count;
+      
       // Cache for 1 hour
       await env.IMAGES_CACHE.put('active-count', count.toString(), { expirationTtl: 3600 });
+      
+      // Trigger full sync in background (non-blocking)
+      // This will sync the full images list too
+      syncKVCache(env).catch(err => console.error('Background sync failed:', err));
     } else {
       count = parseInt(count);
     }

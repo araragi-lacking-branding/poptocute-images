@@ -2,6 +2,8 @@
 // Handle image uploads to R2 with validation and deduplication
 // WebP conversion happens on serve via Cloudflare Image Resizing API
 
+import { syncKVCache } from './sync.js';
+
 export async function handleUpload(request, env) {
   try {
     const formData = await request.formData();
@@ -107,6 +109,15 @@ export async function handleUpload(request, env) {
     ).run();
 
     console.log(`Saved to database: ID ${result.meta.last_row_id}`);
+
+    // Trigger KV sync after successful upload
+    try {
+      await syncKVCache(env);
+      console.log('KV cache synced after upload');
+    } catch (syncError) {
+      console.error('KV sync failed (non-fatal):', syncError);
+      // Don't fail the upload if sync fails
+    }
 
     return new Response(JSON.stringify({ 
       success: true,
