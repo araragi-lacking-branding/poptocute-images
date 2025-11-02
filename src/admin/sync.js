@@ -22,9 +22,14 @@ export async function handleSync(env) {
 
     console.log(`Found ${count} active images in D1`);
 
-    // Update KV cache
+    // Update KV cache with both list and count
     await env.IMAGES_CACHE.put('images-list', JSON.stringify(filenames), {
       expirationTtl: 86400 // 24 hours
+    });
+    
+    // Cache count for fast random selection
+    await env.IMAGES_CACHE.put('active-count', count.toString(), {
+      expirationTtl: 3600 // 1 hour
     });
 
     console.log('KV cache updated successfully');
