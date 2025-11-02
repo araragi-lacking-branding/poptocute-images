@@ -4,27 +4,25 @@ import { handleAdminRequest } from './admin/routes.js';
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const userAgent = request.headers.get('User-Agent') || '';
-    const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
-    const cfRay = request.headers.get('CF-Ray') || 'Unknown';
-    const country = request.headers.get('CF-IPCountry') || 'Unknown';
     
-    // Block aggressive polling bot
+    // Fast path: Block aggressive polling bot (check first for early return)
+    const userAgent = request.headers.get('User-Agent') || '';
     if (userAgent.includes('curly')) {
-      console.log(`[BLOCKED-BOT] IP: ${ip} | Country: ${country} | UA: curly-0.0.1 | Ray: ${cfRay}`);
+      // Log asynchronously to not block response
+      ctx.waitUntil(
+        Promise.resolve().then(() => {
+          const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
+          const country = request.headers.get('CF-IPCountry') || 'Unknown';
+          console.log(`[BLOCKED] ${ip} | ${country} | curly-0.0.1`);
+        })
+      );
       return new Response('Rate limit exceeded. Please reduce request frequency.', { 
         status: 429,
         headers: {
-          'Retry-After': '300', // 5 minutes
+          'Retry-After': '300',
           'Content-Type': 'text/plain'
         }
       });
-    }
-    
-    // Log all requests to root path with detailed info
-    if (url.pathname === '/') {
-      // Only log non-cached requests to reduce noise
-      console.log(`[REQUEST] ${ip} | ${country} | ${userAgent.substring(0, 50)} | ${cfRay}`);
     }
     
     // Admin routes
