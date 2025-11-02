@@ -208,43 +208,90 @@ async function getAllTags(env, corsHeaders) {
 
 // Create new tag
 async function createTag(request, env, corsHeaders) {
-  const { name, category, display_name } = await request.json();
+  try {
+    const { name, category, display_name } = await request.json();
 
-  if (!name || !category) {
-    return new Response(JSON.stringify({ error: 'Name and category required' }), {
-      status: 400,
+    if (!name || !category) {
+      return new Response(JSON.stringify({ error: 'Name and category required' }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
+
+    // Get category ID
+    const categoryResult = await env.DB.prepare(
+      `SELECT id FROM tag_categories WHERE name = ?`
+    ).bind(category).first();
+
+    if (!categoryResult) {
+      return new Response(JSON.stringify({ error: 'Invalid category' }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
+
+    const tagSlug = name.toLowerCase().replace(/\s+/g, '-');
+
+    // Create tag
+    const result = await env.DB.prepare(`
+      INSERT INTO tags (name, display_name, category_id)
+      VALUES (?, ?, ?)
+    `).bind(
+      tagSlug,
+      display_name || name,
+      categoryResult.id
+    ).run();
+
+    const tagId = result.meta.last_row_id;
+
+    // If this is a creator tag, auto-create/link an artist profile
+    if (category === 'creator') {
+      try {
+        // Check if artist already exists with this name
+        const existingArtist = await env.DB.prepare(
+          `SELECT id FROM artists WHERE name = ?`
+        ).bind(tagSlug).first();
+
+        let artistId;
+        if (existingArtist) {
+          artistId = existingArtist.id;
+        } else {
+          // Create new artist profile
+          const artistResult = await env.DB.prepare(`
+            INSERT INTO artists (name, display_name, verified, featured, updated_at)
+            VALUES (?, ?, 0, 0, datetime('now'))
+          `).bind(tagSlug, display_name || name).run();
+          
+          artistId = artistResult.meta.last_row_id;
+        }
+
+        // Link artist to creator tag
+        await env.DB.prepare(`
+          INSERT OR IGNORE INTO artist_tags (artist_id, tag_id)
+          VALUES (?, ?)
+        `).bind(artistId, tagId).run();
+      } catch (error) {
+        console.error('Failed to create/link artist profile:', error);
+        // Don't fail the tag creation if artist creation fails
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      id: tagId
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error creating tag:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      details: error.message 
+    }), {
+      status: 500,
       headers: corsHeaders
     });
   }
-
-  // Get category ID
-  const categoryResult = await env.DB.prepare(
-    `SELECT id FROM tag_categories WHERE name = ?`
-  ).bind(category).first();
-
-  if (!categoryResult) {
-    return new Response(JSON.stringify({ error: 'Invalid category' }), {
-      status: 400,
-      headers: corsHeaders
-    });
-  }
-
-  // Create tag
-  const result = await env.DB.prepare(`
-    INSERT INTO tags (name, display_name, category_id)
-    VALUES (?, ?, ?)
-  `).bind(
-    name.toLowerCase().replace(/\s+/g, '-'),
-    display_name || name,
-    categoryResult.id
-  ).run();
-
-  return new Response(JSON.stringify({
-    success: true,
-    id: result.meta.last_row_id
-  }), {
-    headers: corsHeaders
-  });
 }
 
 // Get detailed image information
