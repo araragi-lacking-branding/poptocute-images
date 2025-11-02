@@ -324,18 +324,22 @@ async function getStats(env, corsHeaders) {
 async function serveMainPage(env) {
   // Pre-fetch random image data for SSR - eliminates API roundtrip
   let initialImageData = null;
+  const perfStart = Date.now();
   try {
     // PERFORMANCE FIX: Two-step approach is much faster than ORDER BY RANDOM() with JOINs
     // Step 1: Get a random ID only (no JOINs, very fast)
+    const step1Start = Date.now();
     const randomIdResult = await env.DB.prepare(`
       SELECT id FROM images 
       WHERE status = 'active'
       ORDER BY RANDOM()
       LIMIT 1
     `).first();
+    const step1Time = Date.now() - step1Start;
     
     if (randomIdResult) {
       // Step 2: Fetch full data for that specific ID (indexed lookup, very fast)
+      const step2Start = Date.now();
       const result = await env.DB.prepare(`
         SELECT
           i.id,
@@ -358,6 +362,7 @@ async function serveMainPage(env) {
         WHERE i.id = ?
         GROUP BY i.id
       `).bind(randomIdResult.id).first();
+      const step2Time = Date.now() - step2Start;
       
       if (result) {
         // Parse tags
@@ -372,6 +377,9 @@ async function serveMainPage(env) {
         
         initialImageData = { ...result, tags };
       }
+      
+      const totalTime = Date.now() - perfStart;
+      console.log(`SSR timing: Step1=${step1Time}ms, Step2=${step2Time}ms, Total=${totalTime}ms`);
     }
   } catch (error) {
     console.error('SSR image fetch error:', error);
