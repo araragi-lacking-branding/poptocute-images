@@ -45,9 +45,9 @@ export default {
       return getImagesList(env);
     }
 
-    // Root path
+    // Root path - SSR with random image pre-selected for faster LCP
     if (url.pathname === '/') {
-      return serveMainPage();
+      return await serveMainPage(env);
     }
 
     // Serve images from R2
@@ -304,10 +304,56 @@ async function getStats(env, corsHeaders) {
 }
 
 // ============================================
-// HTML PAGE
+// HTML PAGE WITH SSR
 // ============================================
 
-async function serveMainPage() {
+async function serveMainPage(env) {
+  // Pre-fetch random image data for SSR - eliminates API roundtrip
+  let initialImageData = null;
+  try {
+    const result = await env.DB.prepare(`
+      SELECT
+        i.id,
+        i.filename,
+        i.alt_text,
+        i.file_size,
+        i.width,
+        i.height,
+        i.mime_type,
+        c.name AS credit_name,
+        c.url AS credit_url,
+        c.social_handle AS credit_social_handle,
+        c.platform AS credit_platform,
+        GROUP_CONCAT(t.name || ':' || COALESCE(t.display_name, t.name) || ':' || tc.name, '|') as tags_data
+      FROM images i
+      LEFT JOIN credits c ON i.credit_id = c.id
+      LEFT JOIN image_tags it ON i.id = it.image_id
+      LEFT JOIN tags t ON it.tag_id = t.id
+      LEFT JOIN tag_categories tc ON t.category_id = tc.id
+      WHERE i.status = 'active'
+      GROUP BY i.id
+      ORDER BY RANDOM()
+      LIMIT 1
+    `).first();
+    
+    if (result) {
+      // Parse tags
+      const tags = [];
+      if (result.tags_data) {
+        result.tags_data.split('|').forEach(part => {
+          const [name, display_name, category] = part.split(':');
+          if (name) tags.push({ name, display_name, category });
+        });
+      }
+      delete result.tags_data;
+      
+      initialImageData = { ...result, tags };
+    }
+  } catch (error) {
+    console.error('SSR image fetch error:', error);
+    // Fall back to client-side fetch on error
+  }
+  
   return new Response(`
     <!DOCTYPE html>
     <html lang="en">
@@ -949,6 +995,9 @@ async function serveMainPage() {
       </aside>
 
       <script>
+        // SSR initial data - eliminates API roundtrip for faster LCP
+        const INITIAL_IMAGE_DATA = ${initialImageData ? JSON.stringify(initialImageData) : 'null'};
+        
         // HTML escape utility for security
         function escapeHtml(text) {
           const div = document.createElement('div');
@@ -1100,19 +1149,25 @@ async function serveMainPage() {
           });
 
           try {
-            // Start image fetch ASAP with high priority
-            // Fetch random image - server returns no-cache to ensure fresh results
-            const fetchPromise = fetch('/api/random', {
-              headers: {
-                'Accept': 'application/json'
-              },
-              priority: 'high'
-            });
+            let data;
             
-            const response = await fetchPromise;
-            if (!response.ok) throw new Error('Failed to fetch image');
-
-            const data = await response.json();
+            // Use SSR data if available (much faster - no API call needed!)
+            if (INITIAL_IMAGE_DATA) {
+              data = INITIAL_IMAGE_DATA;
+              console.log('Using SSR data - instant load');
+            } else {
+              // Fallback: fetch from API
+              console.log('SSR data not available - fetching from API');
+              const response = await fetch('/api/random', {
+                headers: {
+                  'Accept': 'application/json'
+                },
+                priority: 'high'
+              });
+              
+              if (!response.ok) throw new Error('Failed to fetch image');
+              data = await response.json();
+            }
 
             if (!data.filename) {
               throw new Error('No image available');
