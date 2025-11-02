@@ -1171,15 +1171,10 @@ async function serveMainPage() {
               throw new Error('No image available');
             }
 
-            // Set image dimensions and container aspect ratio BEFORE loading to prevent layout shift
+            // Set image dimensions BEFORE loading to prevent layout shift
             if (data.width && data.height) {
-              // Calculate aspect ratio
-              const aspectRatio = data.width / data.height;
-              
-              // Set aspect ratio on container FIRST - this sizes it immediately
-              imageContainer.style.aspectRatio = aspectRatio.toString();
-              
-              // Set explicit dimensions on img element for browser to reserve space
+              // Set explicit dimensions on img element
+              // Browser will reserve correct space based on these
               img.width = data.width;
               img.height = data.height;
             }
