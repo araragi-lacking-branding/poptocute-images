@@ -191,7 +191,28 @@ async function handleAPI(request, env, url) {
 
 async function getRandomImage(env, corsHeaders) {
   try {
-    // Get random image - fast because no tag JOINs
+    // PERFORMANCE: Use random OFFSET instead of ORDER BY RANDOM()
+    // ORDER BY RANDOM() creates temp B-tree and is very slow
+    // Random offset is O(1) instead of O(n log n)
+    
+    // Get count from KV cache (updated periodically)
+    let count = await env.IMAGES_CACHE.get('active-count', 'text');
+    if (!count) {
+      // Fallback to DB query if cache miss
+      const countResult = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM images WHERE status = 'active'
+      `).first();
+      count = countResult.count;
+      // Cache for 1 hour
+      await env.IMAGES_CACHE.put('active-count', count.toString(), { expirationTtl: 3600 });
+    } else {
+      count = parseInt(count);
+    }
+    
+    // Generate random offset
+    const randomOffset = Math.floor(Math.random() * count);
+    
+    // Get random image using OFFSET (much faster than ORDER BY RANDOM())
     const result = await env.DB.prepare(`
       SELECT
         i.id,
@@ -210,9 +231,8 @@ async function getRandomImage(env, corsHeaders) {
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
       WHERE i.status = 'active'
-      ORDER BY RANDOM()
-      LIMIT 1
-    `).first();
+      LIMIT 1 OFFSET ?
+    `).bind(randomOffset).first();
 
     if (!result) {
       return new Response(JSON.stringify({ error: 'No images available' }), {
