@@ -1,7 +1,10 @@
 // src/admin/ui.js
 // Generates the admin tagging interface HTML
 
-export function generateAdminUI() {
+export function generateAdminUI(activeView = 'images') {
+  const isImagesActive = activeView === 'images';
+  const isArtistsActive = activeView === 'artists';
+  
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -53,6 +56,8 @@ export function generateAdminUI() {
           font-size: 14px;
           font-weight: 500;
           transition: all 0.2s;
+          text-decoration: none;
+          display: inline-block;
         }
 
         .header .nav-tab:hover {
@@ -615,8 +620,8 @@ export function generateAdminUI() {
       <div class="header">
         <h1>*cute* and *pop* — Admin</h1>
         <div class="nav-tabs">
-          <button class="nav-tab active" onclick="switchView('images')">📸 Images & Tags</button>
-          <button class="nav-tab" onclick="switchView('artists')">👤 Artist Profiles</button>
+          <a href="/admin/images" class="nav-tab ${isImagesActive ? 'active' : ''}">📸 Images & Tags</a>
+          <a href="/admin/artists" class="nav-tab ${isArtistsActive ? 'active' : ''}">👤 Artist Profiles</a>
         </div>
         <div class="stats">
           <span id="stat-images">Loading...</span>
@@ -629,7 +634,7 @@ export function generateAdminUI() {
       </div>
 
       <!-- Images View -->
-      <div id="view-images" class="view-content active">
+      <div id="view-images" class="view-content ${isImagesActive ? 'active' : ''}">
 
       <div class="main-content">
         <div class="image-viewer">
@@ -751,7 +756,7 @@ export function generateAdminUI() {
       </div>
 
       <!-- Artists View -->
-      <div id="view-artists" class="view-content">
+      <div id="view-artists" class="view-content ${isArtistsActive ? 'active' : ''}">
         <div class="artist-management">
           <div class="artist-list-panel">
             <h2>Artist Profiles</h2>
@@ -795,9 +800,18 @@ export function generateAdminUI() {
 
         document.addEventListener('DOMContentLoaded', async () => {
           await loadStats();
-          await loadAllTags();
-          await loadImageList();
-          await loadImage();
+          
+          // Load data based on active view
+          const artistsView = document.getElementById('view-artists');
+          if (artistsView && artistsView.classList.contains('active')) {
+            // On artists page
+            await loadArtists();
+          } else {
+            // On images page
+            await loadAllTags();
+            await loadImageList();
+            await loadImage();
+          }
         });
 
         async function loadStats() {
@@ -1081,22 +1095,6 @@ export function generateAdminUI() {
           } finally {
             button.disabled = false;
             button.textContent = 'Sync DB';
-          }
-        }
-
-        // View Switching
-        function switchView(viewName) {
-          // Update tabs
-          document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-          event.target.classList.add('active');
-
-          // Update views
-          document.querySelectorAll('.view-content').forEach(view => view.classList.remove('active'));
-          document.getElementById('view-' + viewName).classList.add('active');
-
-          // Load data for artist view
-          if (viewName === 'artists') {
-            loadArtists();
           }
         }
 

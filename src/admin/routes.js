@@ -19,9 +19,24 @@ import {
 export async function handleAdminRequest(request, env, url) {
   const path = url.pathname;
 
-  // Serve admin UI
+  // Serve admin UI - redirect /admin to /admin/images
   if (path === '/admin' || path === '/admin/') {
-    return new Response(generateAdminUI(), {
+    return Response.redirect(url.origin + '/admin/images', 302);
+  }
+
+  // Serve admin images UI
+  if (path === '/admin/images') {
+    return new Response(generateAdminUI('images'), {
+      headers: {
+        'Content-Type': 'text/html;charset=UTF-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate'
+      }
+    });
+  }
+
+  // Serve admin artists UI
+  if (path === '/admin/artists') {
+    return new Response(generateAdminUI('artists'), {
       headers: {
         'Content-Type': 'text/html;charset=UTF-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate'
