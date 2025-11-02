@@ -1260,11 +1260,9 @@ async function serveMainPage() {
                 }
                 img.src = preloadImage.src;
                 
-                // Remove loading state
-                imageContainer.classList.remove('loading');
-                
-                // Trigger smooth fade-in
+                // Remove loading state and trigger fade-in simultaneously
                 requestAnimationFrame(() => {
+                  imageContainer.classList.remove('loading');
                   img.classList.add('loaded');
                 });
 
