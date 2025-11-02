@@ -277,9 +277,29 @@ async function getRandomImage(env, corsHeaders) {
       ORDER BY tc.sort_order, t.name
     `).bind(result.id).all();
 
+    // Generate optimized image URLs using Cloudflare Image Resizing
+    // These only work in production (not local dev)
+    const baseUrl = '/cdn-cgi/image';
+    const imagePath = `/${result.filename}`;
+    
+    const urls = {
+      // Original (for backwards compatibility)
+      original: imagePath,
+      
+      // Optimized variants with WebP/AVIF auto-format
+      mobile: `${baseUrl}/width=640,quality=85,format=auto${imagePath}`,
+      tablet: `${baseUrl}/width=1024,quality=85,format=auto${imagePath}`,
+      desktop: `${baseUrl}/width=1920,quality=85,format=auto${imagePath}`,
+      thumbnail: `${baseUrl}/width=320,quality=80,format=auto${imagePath}`,
+      
+      // Default optimized (good for most cases)
+      optimized: `${baseUrl}/width=1024,quality=85,format=auto${imagePath}`
+    };
+
     return new Response(JSON.stringify({
       ...result,
-      tags: tagsResult.results || []
+      tags: tagsResult.results || [],
+      urls: urls
     }), {
       headers: { 
         ...corsHeaders, 
