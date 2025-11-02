@@ -428,7 +428,6 @@ async function serveMainPage() {
           position: relative;
           width: 100%;
           max-width: 900px;
-          min-height: 300px;
           max-height: 85vh;
           margin: 0 auto 0.75rem;
           background: #f5f5f5;
@@ -440,46 +439,18 @@ async function serveMainPage() {
           justify-content: center;
         }
 
-        .image-container::before {
-          content: "";
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          width: 40px;
-          height: 40px;
-          margin: -20px 0 0 -20px;
-          border: 3px solid #f3f3f3;
-          border-top: 3px solid #555;
-          border-radius: 50%;
-          opacity: 0;
-          transition: opacity 0.2s ease 0.3s;
-          animation: spin 1s linear infinite;
-        }
-
-        .image-container.loading::before {
-          opacity: 1;
-        }
-
-        @keyframes spin {
-          0% { transform: translate(-50%, -50%) rotate(0deg); }
-          100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-
         #randomImage {
           max-width: 100%;
           max-height: 85vh;
           height: auto;
           object-fit: contain;
           opacity: 0;
-          visibility: hidden;
-          transition: opacity 0.2s ease-out, visibility 0s linear 0.2s;
+          transition: opacity 0.3s ease-out;
           display: block;
         }
 
         #randomImage.loaded {
           opacity: 1;
-          visibility: visible;
-          transition: opacity 0.2s ease-out, visibility 0s linear 0s;
         }
 
         /* Mobile optimizations */
@@ -1202,77 +1173,90 @@ async function serveMainPage() {
 
             // Set image dimensions BEFORE loading to prevent layout shift
             if (data.width && data.height) {
-              // Set explicit width and height attributes
-              // This tells the browser to reserve the correct space
+              // Set explicit dimensions on img element
+              // Browser will reserve correct space based on these
               img.width = data.width;
               img.height = data.height;
-              
-              // Set aspect ratio on container to prevent resize
-              const aspectRatio = data.width / data.height;
-              imageContainer.style.aspectRatio = aspectRatio.toString();
             }
 
             // Set alt text immediately
             img.alt = data.alt_text || 'Random cute image';
 
-            // Use optimized URLs if available (progressive enhancement)
+            // Preload image using decode() API for smooth rendering
+            // This prevents flickering by ensuring the image is fully decoded before display
+            const preloadImage = new Image();
+            
+            // Set up responsive images with srcset
             if (data.urls) {
-              // Modern browsers: use srcset for responsive images
-              img.srcset = \`
+              preloadImage.srcset = \`
                 \${data.urls.mobile} 640w,
                 \${data.urls.tablet} 1024w,
                 \${data.urls.desktop} 1920w
               \`.trim();
-              
-              img.sizes = '(max-width: 768px) 640px, (max-width: 1200px) 1024px, 1920px';
-              
-              // Fallback src
-              img.src = data.urls.optimized;
+              preloadImage.sizes = '(max-width: 768px) 640px, (max-width: 1200px) 1024px, 1920px';
+              preloadImage.src = data.urls.optimized;
             } else {
               // Legacy fallback if urls field not present
               const imagePath = data.filename.startsWith('images/')
                 ? \`/\${data.filename}\`
                 : \`/images/\${data.filename}\`;
-              img.src = imagePath;
+              preloadImage.src = imagePath;
             }
 
-            // Add loading state with delay for spinner
-            imageContainer.classList.add('loading');
-            
-            // Use onload for faster perceived performance
-            img.onload = () => {
-              // Remove loading state and show image
-              imageContainer.classList.remove('loading');
-              img.classList.add('loaded');
-              
-              // Pre-warm Cloudflare cache for next random image
-              // This doesn't affect the user experience but speeds up the next image
-              setTimeout(() => {
-                fetch('/api/random', {
-                  headers: { 'Accept': 'application/json' },
-                  priority: 'low'
-                })
-                .then(res => res.json())
-                .then(nextData => {
-                  if (nextData.urls) {
-                    // Prefetch the optimized versions to warm CF cache
-                    // Use link rel=prefetch for low-priority background loading
-                    const prefetchLink = document.createElement('link');
-                    prefetchLink.rel = 'prefetch';
-                    prefetchLink.as = 'image';
-                    prefetchLink.href = nextData.urls.optimized;
-                    document.head.appendChild(prefetchLink);
-                  }
-                })
-                .catch(() => {}); // Silent fail - this is just optimization
-              }, 1000); // Wait 1s after image loads to avoid competing for bandwidth
-            };
+            // Use decode() API if available (modern browsers)
+            // Falls back to onload for older browsers
+            const imageReady = preloadImage.decode ? 
+              preloadImage.decode().catch(() => {
+                // Decode failed, wait for onload instead
+                return new Promise((resolve, reject) => {
+                  preloadImage.onload = resolve;
+                  preloadImage.onerror = reject;
+                });
+              }) :
+              new Promise((resolve, reject) => {
+                preloadImage.onload = resolve;
+                preloadImage.onerror = reject;
+              });
 
-            img.onerror = () => {
-              imageContainer.classList.remove('loading');
-              loadingEl.textContent = 'Failed to load image';
-              loadingEl.style.display = 'block';
-            };
+            imageReady
+              .then(() => {
+                // Image is fully loaded and decoded - transfer to display element
+                if (data.urls) {
+                  img.srcset = preloadImage.srcset;
+                  img.sizes = preloadImage.sizes;
+                }
+                img.src = preloadImage.src;
+                
+                // Trigger smooth fade-in
+                requestAnimationFrame(() => {
+                  img.classList.add('loaded');
+                });
+
+                // Pre-warm Cloudflare cache for next random image
+                setTimeout(() => {
+                  fetch('/api/random', {
+                    headers: { 'Accept': 'application/json' },
+                    priority: 'low'
+                  })
+                  .then(res => res.json())
+                  .then(nextData => {
+                    if (nextData.urls) {
+                      const prefetchLink = document.createElement('link');
+                      prefetchLink.rel = 'prefetch';
+                      prefetchLink.as = 'image';
+                      prefetchLink.href = nextData.urls.optimized;
+                      document.head.appendChild(prefetchLink);
+                    }
+                  })
+                  .catch(() => {}); // Silent fail - this is just optimization
+                }, 1000);
+              })
+              .catch((error) => {
+                // Image failed to load
+                console.error('Image load error:', error);
+                loadingEl.textContent = 'Failed to load image';
+                loadingEl.style.display = 'block';
+              });
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
@@ -1289,6 +1273,14 @@ async function serveMainPage() {
                 expandBtn.style.display = 'none';
               }
             } else {
+              // Show "No tags" message when no tags are available
+              const noTagsMsg = document.createElement('span');
+              noTagsMsg.textContent = 'No Current Tags';
+              noTagsMsg.style.color = 'rgba(255, 255, 255, 0.9)';
+              noTagsMsg.style.fontSize = '0.9rem';
+              noTagsMsg.style.fontWeight = '600';
+              noTagsMsg.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+              tagPreview.appendChild(noTagsMsg);
               expandBtn.style.display = 'none';
             }
 
