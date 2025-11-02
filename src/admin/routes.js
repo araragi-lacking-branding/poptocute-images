@@ -4,6 +4,16 @@
 import { generateAdminUI } from './ui.js';
 import { handleSync } from './sync.js';
 import { handleUpload } from './upload.js';
+import {
+  getAllArtists,
+  getArtistById,
+  createArtist,
+  updateArtist,
+  deleteArtist,
+  linkArtistTag,
+  unlinkArtistTag,
+  getArtistImages
+} from './artists.js';
 
 // Handle admin routes
 export async function handleAdminRequest(request, env, url) {
@@ -95,6 +105,58 @@ async function handleAdminAPI(request, env, url) {
     // POST /api/admin/sync-kv - Sync D1 to KV cache
     if (path === '/sync-kv' && method === 'POST') {
       return await syncKVCache(env, corsHeaders);
+    }
+
+    // ============================================
+    // ARTIST ROUTES
+    // ============================================
+
+    // GET /api/admin/artists - Get all artists
+    if (path === '/artists' && method === 'GET') {
+      return await handleGetArtists(env, url, corsHeaders);
+    }
+
+    // POST /api/admin/artists - Create new artist
+    if (path === '/artists' && method === 'POST') {
+      return await handleCreateArtist(request, env, corsHeaders);
+    }
+
+    // GET /api/admin/artists/:id - Get artist by ID
+    if (path.match(/^\/artists\/\d+$/) && method === 'GET') {
+      const artistId = parseInt(path.split('/').pop());
+      return await handleGetArtist(env, artistId, corsHeaders);
+    }
+
+    // PUT /api/admin/artists/:id - Update artist
+    if (path.match(/^\/artists\/\d+$/) && method === 'PUT') {
+      const artistId = parseInt(path.split('/').pop());
+      return await handleUpdateArtist(request, env, artistId, corsHeaders);
+    }
+
+    // DELETE /api/admin/artists/:id - Delete artist
+    if (path.match(/^\/artists\/\d+$/) && method === 'DELETE') {
+      const artistId = parseInt(path.split('/').pop());
+      return await handleDeleteArtist(env, artistId, corsHeaders);
+    }
+
+    // GET /api/admin/artists/:id/images - Get artist's images
+    if (path.match(/^\/artists\/\d+\/images$/) && method === 'GET') {
+      const artistId = parseInt(path.split('/')[2]);
+      return await handleGetArtistImages(env, artistId, url, corsHeaders);
+    }
+
+    // POST /api/admin/artists/:id/tags - Link tag to artist
+    if (path.match(/^\/artists\/\d+\/tags$/) && method === 'POST') {
+      const artistId = parseInt(path.split('/')[2]);
+      return await handleLinkArtistTag(request, env, artistId, corsHeaders);
+    }
+
+    // DELETE /api/admin/artists/:artistId/tags/:tagId - Unlink tag from artist
+    if (path.match(/^\/artists\/\d+\/tags\/\d+$/) && method === 'DELETE') {
+      const parts = path.split('/');
+      const artistId = parseInt(parts[2]);
+      const tagId = parseInt(parts[4]);
+      return await handleUnlinkArtistTag(env, artistId, tagId, corsHeaders);
     }
 
     return new Response(JSON.stringify({ error: 'Not found' }), {
@@ -336,4 +398,230 @@ async function syncKVCache(env, corsHeaders) {
   }
 }
 
+// ============================================
+// ARTIST API HANDLERS
+// ============================================
+
+// GET /api/admin/artists
+async function handleGetArtists(env, url, corsHeaders) {
+  try {
+    const searchParams = url.searchParams;
+    const options = {
+      featured: searchParams.get('featured') === 'true' ? true : searchParams.get('featured') === 'false' ? false : undefined,
+      search: searchParams.get('search') || undefined,
+      limit: parseInt(searchParams.get('limit')) || 50,
+      offset: parseInt(searchParams.get('offset')) || 0
+    };
+
+    const artists = await getAllArtists(env, options);
+
+    return new Response(JSON.stringify({
+      success: true,
+      artists,
+      count: artists.length
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error getting artists:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
+}
+
+// GET /api/admin/artists/:id
+async function handleGetArtist(env, artistId, corsHeaders) {
+  try {
+    const artist = await getArtistById(env, artistId);
+
+    if (!artist) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Artist not found'
+      }), {
+        status: 404,
+        headers: corsHeaders
+      });
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      artist
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error getting artist:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
+}
+
+// POST /api/admin/artists
+async function handleCreateArtist(request, env, corsHeaders) {
+  try {
+    const artistData = await request.json();
+    const artist = await createArtist(env, artistData);
+
+    return new Response(JSON.stringify({
+      success: true,
+      artist,
+      message: 'Artist created successfully'
+    }), {
+      status: 201,
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error creating artist:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 400,
+      headers: corsHeaders
+    });
+  }
+}
+
+// PUT /api/admin/artists/:id
+async function handleUpdateArtist(request, env, artistId, corsHeaders) {
+  try {
+    const updates = await request.json();
+    const artist = await updateArtist(env, artistId, updates);
+
+    return new Response(JSON.stringify({
+      success: true,
+      artist,
+      message: 'Artist updated successfully'
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error updating artist:', error);
+    const status = error.message === 'Artist not found' ? 404 : 400;
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status,
+      headers: corsHeaders
+    });
+  }
+}
+
+// DELETE /api/admin/artists/:id
+async function handleDeleteArtist(env, artistId, corsHeaders) {
+  try {
+    await deleteArtist(env, artistId);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Artist deleted successfully'
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error deleting artist:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 400,
+      headers: corsHeaders
+    });
+  }
+}
+
+// GET /api/admin/artists/:id/images
+async function handleGetArtistImages(env, artistId, url, corsHeaders) {
+  try {
+    const searchParams = url.searchParams;
+    const options = {
+      limit: parseInt(searchParams.get('limit')) || 50,
+      offset: parseInt(searchParams.get('offset')) || 0,
+      status: searchParams.get('status') || 'active'
+    };
+
+    const images = await getArtistImages(env, artistId, options);
+
+    return new Response(JSON.stringify({
+      success: true,
+      images,
+      count: images.length
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error getting artist images:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
+}
+
+// POST /api/admin/artists/:id/tags
+async function handleLinkArtistTag(request, env, artistId, corsHeaders) {
+  try {
+    const { tag_id } = await request.json();
+
+    if (!tag_id) {
+      throw new Error('tag_id is required');
+    }
+
+    await linkArtistTag(env, artistId, tag_id);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Tag linked to artist successfully'
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error linking artist tag:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 400,
+      headers: corsHeaders
+    });
+  }
+}
+
+// DELETE /api/admin/artists/:artistId/tags/:tagId
+async function handleUnlinkArtistTag(env, artistId, tagId, corsHeaders) {
+  try {
+    await unlinkArtistTag(env, artistId, tagId);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Tag unlinked from artist successfully'
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error unlinking artist tag:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 400,
+      headers: corsHeaders
+    });
+  }
+}
 
