@@ -176,6 +176,7 @@ async function handleAPI(request, env, url) {
 
 async function getRandomImage(env, corsHeaders) {
   try {
+    // Single optimized query with tags included - much faster than 2 queries
     const result = await env.DB.prepare(`
       SELECT
         i.id,
@@ -190,10 +191,15 @@ async function getRandomImage(env, corsHeaders) {
         c.url AS credit_url,
         c.social_handle AS credit_social_handle,
         c.platform AS credit_platform,
-        c.license AS credit_license
+        c.license AS credit_license,
+        GROUP_CONCAT(t.name || ':' || COALESCE(t.display_name, t.name) || ':' || tc.name, '|') as tags_data
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
+      LEFT JOIN image_tags it ON i.id = it.image_id
+      LEFT JOIN tags t ON it.tag_id = t.id
+      LEFT JOIN tag_categories tc ON t.category_id = tc.id
       WHERE i.status = 'active'
+      GROUP BY i.id
       ORDER BY RANDOM()
       LIMIT 1
     `).first();
@@ -205,18 +211,24 @@ async function getRandomImage(env, corsHeaders) {
       });
     }
 
-    const tags = await env.DB.prepare(`
-      SELECT t.name, t.display_name, tc.name as category
-      FROM image_tags it
-      JOIN tags t ON it.tag_id = t.id
-      JOIN tag_categories tc ON t.category_id = tc.id
-      WHERE it.image_id = ?
-      ORDER BY tc.sort_order, t.name
-    `).bind(result.id).all();
+    // Parse tags from concatenated string
+    const tags = [];
+    if (result.tags_data) {
+      const tagParts = result.tags_data.split('|');
+      tagParts.forEach(part => {
+        const [name, display_name, category] = part.split(':');
+        if (name) {
+          tags.push({ name, display_name, category });
+        }
+      });
+    }
+    
+    // Remove tags_data from response
+    delete result.tags_data;
 
     return new Response(JSON.stringify({
       ...result,
-      tags: tags.results || []
+      tags
     }), {
       headers: { 
         ...corsHeaders, 
