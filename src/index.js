@@ -471,15 +471,12 @@ async function serveMainPage() {
           height: auto;
           object-fit: contain;
           opacity: 0;
-          visibility: hidden;
-          transition: opacity 0.2s ease-out, visibility 0s linear 0.2s;
+          transition: opacity 0.3s ease-out;
           display: block;
         }
 
         #randomImage.loaded {
           opacity: 1;
-          visibility: visible;
-          transition: opacity 0.2s ease-out, visibility 0s linear 0s;
         }
 
         /* Mobile optimizations */
@@ -1215,64 +1212,88 @@ async function serveMainPage() {
             // Set alt text immediately
             img.alt = data.alt_text || 'Random cute image';
 
-            // Use optimized URLs if available (progressive enhancement)
+            // Add loading state
+            imageContainer.classList.add('loading');
+
+            // Preload image using decode() API for smooth rendering
+            // This prevents flickering by ensuring the image is fully decoded before display
+            const preloadImage = new Image();
+            
+            // Set up responsive images with srcset
             if (data.urls) {
-              // Modern browsers: use srcset for responsive images
-              img.srcset = \`
+              preloadImage.srcset = \`
                 \${data.urls.mobile} 640w,
                 \${data.urls.tablet} 1024w,
                 \${data.urls.desktop} 1920w
               \`.trim();
-              
-              img.sizes = '(max-width: 768px) 640px, (max-width: 1200px) 1024px, 1920px';
-              
-              // Fallback src
-              img.src = data.urls.optimized;
+              preloadImage.sizes = '(max-width: 768px) 640px, (max-width: 1200px) 1024px, 1920px';
+              preloadImage.src = data.urls.optimized;
             } else {
               // Legacy fallback if urls field not present
               const imagePath = data.filename.startsWith('images/')
                 ? \`/\${data.filename}\`
                 : \`/images/\${data.filename}\`;
-              img.src = imagePath;
+              preloadImage.src = imagePath;
             }
 
-            // Add loading state with delay for spinner
-            imageContainer.classList.add('loading');
-            
-            // Use onload for faster perceived performance
-            img.onload = () => {
-              // Remove loading state and show image
-              imageContainer.classList.remove('loading');
-              img.classList.add('loaded');
-              
-              // Pre-warm Cloudflare cache for next random image
-              // This doesn't affect the user experience but speeds up the next image
-              setTimeout(() => {
-                fetch('/api/random', {
-                  headers: { 'Accept': 'application/json' },
-                  priority: 'low'
-                })
-                .then(res => res.json())
-                .then(nextData => {
-                  if (nextData.urls) {
-                    // Prefetch the optimized versions to warm CF cache
-                    // Use link rel=prefetch for low-priority background loading
-                    const prefetchLink = document.createElement('link');
-                    prefetchLink.rel = 'prefetch';
-                    prefetchLink.as = 'image';
-                    prefetchLink.href = nextData.urls.optimized;
-                    document.head.appendChild(prefetchLink);
-                  }
-                })
-                .catch(() => {}); // Silent fail - this is just optimization
-              }, 1000); // Wait 1s after image loads to avoid competing for bandwidth
-            };
+            // Use decode() API if available (modern browsers)
+            // Falls back to onload for older browsers
+            const imageReady = preloadImage.decode ? 
+              preloadImage.decode().catch(() => {
+                // Decode failed, wait for onload instead
+                return new Promise((resolve, reject) => {
+                  preloadImage.onload = resolve;
+                  preloadImage.onerror = reject;
+                });
+              }) :
+              new Promise((resolve, reject) => {
+                preloadImage.onload = resolve;
+                preloadImage.onerror = reject;
+              });
 
-            img.onerror = () => {
-              imageContainer.classList.remove('loading');
-              loadingEl.textContent = 'Failed to load image';
-              loadingEl.style.display = 'block';
-            };
+            imageReady
+              .then(() => {
+                // Image is fully loaded and decoded - transfer to display element
+                if (data.urls) {
+                  img.srcset = preloadImage.srcset;
+                  img.sizes = preloadImage.sizes;
+                }
+                img.src = preloadImage.src;
+                
+                // Remove loading state
+                imageContainer.classList.remove('loading');
+                
+                // Trigger smooth fade-in
+                requestAnimationFrame(() => {
+                  img.classList.add('loaded');
+                });
+
+                // Pre-warm Cloudflare cache for next random image
+                setTimeout(() => {
+                  fetch('/api/random', {
+                    headers: { 'Accept': 'application/json' },
+                    priority: 'low'
+                  })
+                  .then(res => res.json())
+                  .then(nextData => {
+                    if (nextData.urls) {
+                      const prefetchLink = document.createElement('link');
+                      prefetchLink.rel = 'prefetch';
+                      prefetchLink.as = 'image';
+                      prefetchLink.href = nextData.urls.optimized;
+                      document.head.appendChild(prefetchLink);
+                    }
+                  })
+                  .catch(() => {}); // Silent fail - this is just optimization
+                }, 1000);
+              })
+              .catch((error) => {
+                // Image failed to load
+                console.error('Image load error:', error);
+                imageContainer.classList.remove('loading');
+                loadingEl.textContent = 'Failed to load image';
+                loadingEl.style.display = 'block';
+              });
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
