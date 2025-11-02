@@ -45,15 +45,30 @@ export default {
       return getImagesList(env);
     }
 
-    // Root path - SSR with random image pre-selected for faster LCP
+    // Root path
     if (url.pathname === '/') {
-      return await serveMainPage(env);
+      return serveMainPage();
     }
 
     // Serve images from R2
-    // DO NOT handle /cdn-cgi/image/ paths - let Cloudflare handle those by fetching from /images/
-    if (url.pathname.startsWith('/images/')) {
-      const filename = url.pathname.substring(1); // Remove leading slash: "images/abc.png"
+    // Support /cdn-cgi/image/ paths for Cloudflare Image Resizing
+    if (url.pathname.startsWith('/images/') || url.pathname.includes('/cdn-cgi/image/')) {
+      // Extract actual image path
+      let filename;
+      
+      if (url.pathname.includes('/cdn-cgi/image/')) {
+        // Path like: /cdn-cgi/image/format=webp/images/abc.png
+        // Extract: images/abc.png
+        const match = url.pathname.match(/\/images\/.+$/);
+        if (match) {
+          filename = match[0].substring(1); // Remove leading slash
+        } else {
+          return new Response('Invalid cdn-cgi path', { status: 400 });
+        }
+      } else {
+        // Regular path: /images/abc.png
+        filename = url.pathname.substring(1); // Remove leading slash
+      }
       
       try {
         const object = await env.IMAGES.get(filename);
@@ -321,71 +336,9 @@ async function getStats(env, corsHeaders) {
 // HTML PAGE WITH SSR
 // ============================================
 
-async function serveMainPage(env) {
-  // Pre-fetch random image data for SSR - eliminates API roundtrip
-  let initialImageData = null;
-  const perfStart = Date.now();
-  try {
-    // PERFORMANCE FIX: Two-step approach is much faster than ORDER BY RANDOM() with JOINs
-    // Step 1: Get a random ID only (no JOINs, very fast)
-    const step1Start = Date.now();
-    const randomIdResult = await env.DB.prepare(`
-      SELECT id FROM images 
-      WHERE status = 'active'
-      ORDER BY RANDOM()
-      LIMIT 1
-    `).first();
-    const step1Time = Date.now() - step1Start;
-    
-    if (randomIdResult) {
-      // Step 2: Fetch full data for that specific ID (indexed lookup, very fast)
-      const step2Start = Date.now();
-      const result = await env.DB.prepare(`
-        SELECT
-          i.id,
-          i.filename,
-          i.alt_text,
-          i.file_size,
-          i.width,
-          i.height,
-          i.mime_type,
-          c.name AS credit_name,
-          c.url AS credit_url,
-          c.social_handle AS credit_social_handle,
-          c.platform AS credit_platform,
-          GROUP_CONCAT(t.name || ':' || COALESCE(t.display_name, t.name) || ':' || tc.name, '|') as tags_data
-        FROM images i
-        LEFT JOIN credits c ON i.credit_id = c.id
-        LEFT JOIN image_tags it ON i.id = it.image_id
-        LEFT JOIN tags t ON it.tag_id = t.id
-        LEFT JOIN tag_categories tc ON t.category_id = tc.id
-        WHERE i.id = ?
-        GROUP BY i.id
-      `).bind(randomIdResult.id).first();
-      const step2Time = Date.now() - step2Start;
-      
-      if (result) {
-        // Parse tags
-        const tags = [];
-        if (result.tags_data) {
-          result.tags_data.split('|').forEach(part => {
-            const [name, display_name, category] = part.split(':');
-            if (name) tags.push({ name, display_name, category });
-          });
-        }
-        delete result.tags_data;
-        
-        initialImageData = { ...result, tags };
-      }
-      
-      const totalTime = Date.now() - perfStart;
-      console.log(`SSR timing: Step1=${step1Time}ms, Step2=${step2Time}ms, Total=${totalTime}ms`);
-    }
-  } catch (error) {
-    console.error('SSR image fetch error:', error);
-    // Fall back to client-side fetch on error
-  }
-  
+async function serveMainPage() {
+  // Fast HTML delivery - no DB queries here!
+  // Client will fetch image data asynchronously for better perceived performance
   return new Response(`
     <!DOCTYPE html>
     <html lang="en">
@@ -1027,8 +980,8 @@ async function serveMainPage(env) {
       </aside>
 
       <script>
-        // SSR initial data - eliminates API roundtrip for faster LCP
-        const INITIAL_IMAGE_DATA = ${initialImageData ? JSON.stringify(initialImageData) : 'null'};
+        // No SSR - client fetches image data for faster HTML delivery
+        const INITIAL_IMAGE_DATA = null;
         
         // HTML escape utility for security
         function escapeHtml(text) {
@@ -1359,10 +1312,8 @@ async function serveMainPage(env) {
   `, {
     headers: {
       'Content-Type': 'text/html;charset=UTF-8',
-      // No caching - each response has unique random image data
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+      // Cache HTML (static, client fetches random image)
+      'Cache-Control': 'public, max-age=300'
     }
   });
 }
