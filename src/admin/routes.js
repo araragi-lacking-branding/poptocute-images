@@ -293,7 +293,12 @@ async function createTag(request, env, corsHeaders) {
 
     return new Response(JSON.stringify({
       success: true,
-      id: tagId
+      tag: {
+        id: tagId,
+        name: tagSlug,
+        display_name: display_name || name,
+        category: category
+      }
     }), {
       headers: corsHeaders
     });

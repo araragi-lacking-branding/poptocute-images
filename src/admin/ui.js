@@ -249,14 +249,56 @@ export function generateAdminUI(activeView = 'images') {
           margin-top: 10px;
           display: flex;
           gap: 8px;
+          position: relative;
+        }
+
+        .add-tag-form .autocomplete-container {
+          flex: 1;
+          position: relative;
         }
 
         .add-tag-form input {
-          flex: 1;
+          width: 100%;
           padding: 8px 12px;
           border: 1px solid #ddd;
           border-radius: 4px;
           font-size: 13px;
+        }
+
+        .autocomplete-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: white;
+          border: 1px solid #ddd;
+          border-top: none;
+          border-radius: 0 0 4px 4px;
+          max-height: 200px;
+          overflow-y: auto;
+          display: none;
+          z-index: 1000;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .autocomplete-dropdown.active {
+          display: block;
+        }
+
+        .autocomplete-item {
+          padding: 8px 12px;
+          cursor: pointer;
+          font-size: 13px;
+          border-bottom: 1px solid #f0f0f0;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+          background: #f5f5f5;
+        }
+
+        .autocomplete-item:last-child {
+          border-bottom: none;
         }
 
         .add-tag-form button {
@@ -689,7 +731,10 @@ export function generateAdminUI(activeView = 'images') {
             <h3>Content</h3>
             <div class="tag-list" id="tags-content"></div>
             <div class="add-tag-form">
-              <input type="text" placeholder="Add new content tag..." id="new-tag-content" />
+              <div class="autocomplete-container">
+                <input type="text" placeholder="Add new content tag..." id="new-tag-content" autocomplete="off" />
+                <div class="autocomplete-dropdown" id="autocomplete-content"></div>
+              </div>
               <button onclick="addNewTag('content')">+</button>
             </div>
           </div>
@@ -698,7 +743,10 @@ export function generateAdminUI(activeView = 'images') {
             <h3>Character</h3>
             <div class="tag-list" id="tags-character"></div>
             <div class="add-tag-form">
-              <input type="text" placeholder="Add new character tag..." id="new-tag-character" />
+              <div class="autocomplete-container">
+                <input type="text" placeholder="Add new character tag..." id="new-tag-character" autocomplete="off" />
+                <div class="autocomplete-dropdown" id="autocomplete-character"></div>
+              </div>
               <button onclick="addNewTag('character')">+</button>
             </div>
           </div>
@@ -707,7 +755,10 @@ export function generateAdminUI(activeView = 'images') {
             <h3>Creator</h3>
             <div class="tag-list" id="tags-creator"></div>
             <div class="add-tag-form">
-              <input type="text" placeholder="Add new creator tag..." id="new-tag-creator" />
+              <div class="autocomplete-container">
+                <input type="text" placeholder="Add new creator tag..." id="new-tag-creator" autocomplete="off" />
+                <div class="autocomplete-dropdown" id="autocomplete-creator"></div>
+              </div>
               <button onclick="addNewTag('creator')">+</button>
             </div>
           </div>
@@ -716,7 +767,10 @@ export function generateAdminUI(activeView = 'images') {
             <h3>Source</h3>
             <div class="tag-list" id="tags-source"></div>
             <div class="add-tag-form">
-              <input type="text" placeholder="Add new source tag..." id="new-tag-source" />
+              <div class="autocomplete-container">
+                <input type="text" placeholder="Add new source tag..." id="new-tag-source" autocomplete="off" />
+                <div class="autocomplete-dropdown" id="autocomplete-source"></div>
+              </div>
               <button onclick="addNewTag('source')">+</button>
             </div>
           </div>
@@ -811,6 +865,7 @@ export function generateAdminUI(activeView = 'images') {
             await loadAllTags();
             await loadImageList();
             await loadImage();
+            setupTagAutocomplete(); // Initialize autocomplete after tags are loaded
           }
         });
 
@@ -865,6 +920,19 @@ export function generateAdminUI(activeView = 'images') {
           
           if (!tagName) return;
           
+          // Check if tag already exists (case-insensitive)
+          const existingTag = (allTags[category] || []).find(tag => 
+            (tag.display_name || tag.name).toLowerCase() === tagName.toLowerCase()
+          );
+          
+          if (existingTag) {
+            // Tag exists - just select it
+            toggleTag(existingTag.id, category);
+            input.value = '';
+            hideAutocomplete(category);
+            return;
+          }
+          
           try {
             const response = await fetch('/api/admin/tags', {
               method: 'POST',
@@ -873,12 +941,134 @@ export function generateAdminUI(activeView = 'images') {
             });
             
             if (response.ok) {
+              const result = await response.json();
+              const newTag = result.tag;
+              
               input.value = '';
+              hideAutocomplete(category);
               await loadAllTags();
+              
+              // Auto-select the newly created tag
+              if (newTag && newTag.id) {
+                toggleTag(newTag.id, category);
+              }
             }
           } catch (error) {
             console.error('Failed to add tag:', error);
           }
+        }
+
+        // Autocomplete functionality
+        let selectedAutocompleteIndex = -1;
+
+        function setupTagAutocomplete() {
+          ['content', 'character', 'creator', 'source'].forEach(category => {
+            const input = document.getElementById(\`new-tag-\${category}\`);
+            const dropdown = document.getElementById(\`autocomplete-\${category}\`);
+            
+            if (!input || !dropdown) return;
+
+            // Handle input changes
+            input.addEventListener('input', function() {
+              const query = this.value.trim().toLowerCase();
+              if (!query) {
+                hideAutocomplete(category);
+                return;
+              }
+              
+              const matches = (allTags[category] || []).filter(tag => {
+                const name = (tag.display_name || tag.name).toLowerCase();
+                return name.includes(query);
+              });
+              
+              showAutocomplete(category, matches, query);
+            });
+
+            // Handle keyboard navigation
+            input.addEventListener('keydown', function(e) {
+              const dropdown = document.getElementById(\`autocomplete-\${category}\`);
+              const items = dropdown.querySelectorAll('.autocomplete-item');
+              
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedAutocompleteIndex = Math.min(selectedAutocompleteIndex + 1, items.length - 1);
+                updateAutocompleteSelection(dropdown, items);
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedAutocompleteIndex = Math.max(selectedAutocompleteIndex - 1, -1);
+                updateAutocompleteSelection(dropdown, items);
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedAutocompleteIndex >= 0 && items[selectedAutocompleteIndex]) {
+                  // Select autocomplete item
+                  items[selectedAutocompleteIndex].click();
+                } else {
+                  // Create new tag
+                  addNewTag(category);
+                }
+              } else if (e.key === 'Escape') {
+                hideAutocomplete(category);
+              }
+            });
+
+            // Hide dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+              if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                hideAutocomplete(category);
+              }
+            });
+          });
+        }
+
+        function showAutocomplete(category, matches, query) {
+          const dropdown = document.getElementById(\`autocomplete-\${category}\`);
+          if (!dropdown) return;
+          
+          selectedAutocompleteIndex = -1;
+          
+          if (matches.length === 0) {
+            dropdown.classList.remove('active');
+            return;
+          }
+          
+          dropdown.innerHTML = matches.map(tag => \`
+            <div class="autocomplete-item" onclick="selectExistingTag('\${category}', \${tag.id}, '\${(tag.display_name || tag.name).replace(/'/g, "\\\\'")}')">
+              \${tag.display_name || tag.name}
+            </div>
+          \`).join('');
+          
+          dropdown.classList.add('active');
+        }
+
+        function hideAutocomplete(category) {
+          const dropdown = document.getElementById(\`autocomplete-\${category}\`);
+          if (dropdown) {
+            dropdown.classList.remove('active');
+            dropdown.innerHTML = '';
+          }
+          selectedAutocompleteIndex = -1;
+        }
+
+        function updateAutocompleteSelection(dropdown, items) {
+          items.forEach((item, index) => {
+            if (index === selectedAutocompleteIndex) {
+              item.classList.add('selected');
+              item.scrollIntoView({ block: 'nearest' });
+            } else {
+              item.classList.remove('selected');
+            }
+          });
+        }
+
+        function selectExistingTag(category, tagId, tagName) {
+          const input = document.getElementById(\`new-tag-\${category}\`);
+          
+          // Toggle the tag
+          toggleTag(tagId, category);
+          
+          // Clear input and hide dropdown
+          input.value = '';
+          hideAutocomplete(category);
         }
 
         async function loadImageList() {
