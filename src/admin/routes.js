@@ -535,6 +535,9 @@ async function handleCreateArtist(request, env, corsHeaders) {
     const artistData = await request.json();
     const artist = await createArtist(env, artistData);
 
+    // Trigger sync to update KV cache
+    await syncKVCache(env, corsHeaders);
+
     return new Response(JSON.stringify({
       success: true,
       artist,
@@ -560,6 +563,9 @@ async function handleUpdateArtist(request, env, artistId, corsHeaders) {
   try {
     const updates = await request.json();
     const artist = await updateArtist(env, artistId, updates);
+
+    // Trigger sync to update KV cache
+    await syncKVCache(env, corsHeaders);
 
     return new Response(JSON.stringify({
       success: true,
