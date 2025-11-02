@@ -1,9 +1,30 @@
 import { handleAdminRequest } from './admin/routes.js';
+import { syncKVCache } from './admin/sync.js';
 
 // src/index.js - Worker with Image Transformations via fetch
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    
+    // Fast path: Block aggressive polling bot (check first for early return)
+    const userAgent = request.headers.get('User-Agent') || '';
+    if (userAgent.includes('curly')) {
+      // Log asynchronously to not block response
+      ctx.waitUntil(
+        Promise.resolve().then(() => {
+          const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
+          const country = request.headers.get('CF-IPCountry') || 'Unknown';
+          console.log(`[BLOCKED] ${ip} | ${country} | curly-0.0.1`);
+        })
+      );
+      return new Response('Rate limit exceeded. Please reduce request frequency.', { 
+        status: 429,
+        headers: {
+          'Retry-After': '300',
+          'Content-Type': 'text/plain'
+        }
+      });
+    }
     
     // Admin routes
     if (url.pathname.startsWith('/admin')) {
@@ -31,9 +52,24 @@ export default {
     }
 
     // Serve images from R2
-    // DO NOT handle /cdn-cgi/image/ paths - let Cloudflare handle those by fetching from /images/
-    if (url.pathname.startsWith('/images/')) {
-      const filename = url.pathname.substring(1); // Remove leading slash: "images/abc.png"
+    // Support /cdn-cgi/image/ paths for Cloudflare Image Resizing
+    if (url.pathname.startsWith('/images/') || url.pathname.includes('/cdn-cgi/image/')) {
+      // Extract actual image path
+      let filename;
+      
+      if (url.pathname.includes('/cdn-cgi/image/')) {
+        // Path like: /cdn-cgi/image/format=webp/images/abc.png
+        // Extract: images/abc.png
+        const match = url.pathname.match(/\/images\/.+$/);
+        if (match) {
+          filename = match[0].substring(1); // Remove leading slash
+        } else {
+          return new Response('Invalid cdn-cgi path', { status: 400 });
+        }
+      } else {
+        // Regular path: /images/abc.png
+        filename = url.pathname.substring(1); // Remove leading slash
+      }
       
       try {
         const object = await env.IMAGES.get(filename);
@@ -61,6 +97,23 @@ export default {
     
     return new Response('Not Found', { status: 404 });
   },
+
+  /**
+   * Scheduled event handler for Cron Triggers
+   * Runs daily sync at 3 AM UTC
+   */
+  async scheduled(event, env, ctx) {
+    console.log('Scheduled sync triggered at', new Date().toISOString());
+    
+    try {
+      // Sync KV cache with D1 data
+      const result = await syncKVCache(env);
+      console.log(`Scheduled sync completed: ${result.count} images synced at ${result.timestamp}`);
+    } catch (error) {
+      console.error('Scheduled sync failed:', error);
+      // Don't throw - we don't want to mark the scheduled event as failed
+    }
+  }
 };
 
 // ============================================
@@ -156,6 +209,36 @@ async function handleAPI(request, env, url) {
 
 async function getRandomImage(env, corsHeaders) {
   try {
+    // PERFORMANCE: Use random OFFSET instead of ORDER BY RANDOM()
+    // ORDER BY RANDOM() creates temp B-tree and is very slow
+    // Random offset is O(1) instead of O(n log n)
+    
+    // Get count from KV cache (updated periodically)
+    let count = await env.IMAGES_CACHE.get('active-count', 'text');
+    if (!count) {
+      // Cache miss - likely first request after deployment
+      console.warn('KV cache miss - triggering sync');
+      
+      // Immediate fallback to DB query (don't block request)
+      const countResult = await env.DB.prepare(`
+        SELECT COUNT(*) as count FROM images WHERE status = 'active'
+      `).first();
+      count = countResult.count;
+      
+      // Cache for 1 hour
+      await env.IMAGES_CACHE.put('active-count', count.toString(), { expirationTtl: 3600 });
+      
+      // Trigger full sync in background (non-blocking)
+      // This will sync the full images list too
+      syncKVCache(env).catch(err => console.error('Background sync failed:', err));
+    } else {
+      count = parseInt(count);
+    }
+    
+    // Generate random offset
+    const randomOffset = Math.floor(Math.random() * count);
+    
+    // Get random image using OFFSET (much faster than ORDER BY RANDOM())
     const result = await env.DB.prepare(`
       SELECT
         i.id,
@@ -174,9 +257,8 @@ async function getRandomImage(env, corsHeaders) {
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
       WHERE i.status = 'active'
-      ORDER BY RANDOM()
-      LIMIT 1
-    `).first();
+      LIMIT 1 OFFSET ?
+    `).bind(randomOffset).first();
 
     if (!result) {
       return new Response(JSON.stringify({ error: 'No images available' }), {
@@ -185,7 +267,8 @@ async function getRandomImage(env, corsHeaders) {
       });
     }
 
-    const tags = await env.DB.prepare(`
+    // Get tags separately - fast indexed lookup
+    const tagsResult = await env.DB.prepare(`
       SELECT t.name, t.display_name, tc.name as category
       FROM image_tags it
       JOIN tags t ON it.tag_id = t.id
@@ -194,9 +277,29 @@ async function getRandomImage(env, corsHeaders) {
       ORDER BY tc.sort_order, t.name
     `).bind(result.id).all();
 
+    // Generate optimized image URLs using Cloudflare Image Resizing
+    // These only work in production (not local dev)
+    const baseUrl = '/cdn-cgi/image';
+    const imagePath = `/${result.filename}`;
+    
+    const urls = {
+      // Original (for backwards compatibility)
+      original: imagePath,
+      
+      // Optimized variants with WebP/AVIF auto-format
+      mobile: `${baseUrl}/width=640,quality=85,format=auto${imagePath}`,
+      tablet: `${baseUrl}/width=1024,quality=85,format=auto${imagePath}`,
+      desktop: `${baseUrl}/width=1920,quality=85,format=auto${imagePath}`,
+      thumbnail: `${baseUrl}/width=320,quality=80,format=auto${imagePath}`,
+      
+      // Default optimized (good for most cases)
+      optimized: `${baseUrl}/width=1024,quality=85,format=auto${imagePath}`
+    };
+
     return new Response(JSON.stringify({
       ...result,
-      tags: tags.results || []
+      tags: tagsResult.results || [],
+      urls: urls
     }), {
       headers: { 
         ...corsHeaders, 
@@ -272,10 +375,12 @@ async function getStats(env, corsHeaders) {
 }
 
 // ============================================
-// HTML PAGE
+// HTML PAGE WITH SSR
 // ============================================
 
 async function serveMainPage() {
+  // Fast HTML delivery - no DB queries here!
+  // Client will fetch image data asynchronously for better perceived performance
   return new Response(`
     <!DOCTYPE html>
     <html lang="en">
@@ -284,6 +389,7 @@ async function serveMainPage() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>*cute* and *pop*</title>
       <link rel="icon" type="image/x-icon" href="favicon.ico">
+      <link rel="preconnect" href="https://cutetopop.com">
       <style>
         * {
           box-sizing: border-box;
@@ -863,16 +969,10 @@ async function serveMainPage() {
       </style>
     </head>
     <body>
-<<<<<<< HEAD
-      <div class="image-container" role="img" aria-label="Random cute image">
-        <div class="loading" aria-live="polite">Loading...</div>
-        <img id="randomImage" alt="" loading="eager" fetchpriority="high" />
-=======
       <div class="main-content">
         <div class="image-container" role="img" aria-label="Random cute image">
           <div class="loading" aria-live="polite">Loading...</div>
-          <img id="randomImage" alt="" loading="eager" />
->>>>>>> perf-optimizations
+          <img id="randomImage" alt="" loading="eager" fetchpriority="high" />
 
           <div class="tag-overlay" id="tagOverlay" aria-label="Image tags">
             <div class="tag-preview" id="tagPreview" role="navigation" aria-label="Quick tags"></div>
@@ -922,6 +1022,9 @@ async function serveMainPage() {
       </aside>
 
       <script>
+        // No SSR - client fetches image data for faster HTML delivery
+        const INITIAL_IMAGE_DATA = null;
+        
         // HTML escape utility for security
         function escapeHtml(text) {
           const div = document.createElement('div');
@@ -1073,31 +1176,30 @@ async function serveMainPage() {
           });
 
           try {
-            // Fetch random image - server returns no-cache to ensure fresh results
-            const response = await fetch('/api/random', {
-              headers: {
-                'Accept': 'application/json'
-              }
-            });
-            if (!response.ok) throw new Error('Failed to fetch image');
-
-            const data = await response.json();
+            let data;
+            
+            // Use SSR data if available (much faster - no API call needed!)
+            if (INITIAL_IMAGE_DATA) {
+              data = INITIAL_IMAGE_DATA;
+              console.log('Using SSR data - instant load');
+            } else {
+              // Fallback: fetch from API
+              console.log('SSR data not available - fetching from API');
+              const response = await fetch('/api/random', {
+                headers: {
+                  'Accept': 'application/json'
+                },
+                priority: 'high'
+              });
+              
+              if (!response.ok) throw new Error('Failed to fetch image');
+              data = await response.json();
+            }
 
             if (!data.filename) {
               throw new Error('No image available');
             }
 
-<<<<<<< HEAD
-            // Load image with WebP optimization via Cloudflare Image Resizing
-            // Handle filenames that may or may not include 'images/' prefix
-            const imageFilename = data.filename.startsWith('images/')
-              ? data.filename
-              : \`images/\${data.filename}\`;
-            
-            // Use Cloudflare Image Resizing for WebP conversion and optimization
-            const imagePath = \`/cdn-cgi/image/format=auto,quality=85,width=1200/\${imageFilename}\`;
-            const tempImg = new Image();
-=======
             // Set image dimensions BEFORE loading to prevent layout shift
             if (data.width && data.height) {
               // Set explicit width and height attributes
@@ -1113,12 +1215,26 @@ async function serveMainPage() {
             // Set alt text immediately
             img.alt = data.alt_text || 'Random cute image';
 
-            // Load image
-            // Handle filenames that may or may not include 'images/' prefix
-            const imagePath = data.filename.startsWith('images/')
-              ? \`/\${data.filename}\`
-              : \`/images/\${data.filename}\`;
->>>>>>> perf-optimizations
+            // Use optimized URLs if available (progressive enhancement)
+            if (data.urls) {
+              // Modern browsers: use srcset for responsive images
+              img.srcset = \`
+                \${data.urls.mobile} 640w,
+                \${data.urls.tablet} 1024w,
+                \${data.urls.desktop} 1920w
+              \`.trim();
+              
+              img.sizes = '(max-width: 768px) 640px, (max-width: 1200px) 1024px, 1920px';
+              
+              // Fallback src
+              img.src = data.urls.optimized;
+            } else {
+              // Legacy fallback if urls field not present
+              const imagePath = data.filename.startsWith('images/')
+                ? \`/\${data.filename}\`
+                : \`/images/\${data.filename}\`;
+              img.src = imagePath;
+            }
 
             // Add loading state with delay for spinner
             imageContainer.classList.add('loading');
@@ -1128,6 +1244,28 @@ async function serveMainPage() {
               // Remove loading state and show image
               imageContainer.classList.remove('loading');
               img.classList.add('loaded');
+              
+              // Pre-warm Cloudflare cache for next random image
+              // This doesn't affect the user experience but speeds up the next image
+              setTimeout(() => {
+                fetch('/api/random', {
+                  headers: { 'Accept': 'application/json' },
+                  priority: 'low'
+                })
+                .then(res => res.json())
+                .then(nextData => {
+                  if (nextData.urls) {
+                    // Prefetch the optimized versions to warm CF cache
+                    // Use link rel=prefetch for low-priority background loading
+                    const prefetchLink = document.createElement('link');
+                    prefetchLink.rel = 'prefetch';
+                    prefetchLink.as = 'image';
+                    prefetchLink.href = nextData.urls.optimized;
+                    document.head.appendChild(prefetchLink);
+                  }
+                })
+                .catch(() => {}); // Silent fail - this is just optimization
+              }, 1000); // Wait 1s after image loads to avoid competing for bandwidth
             };
 
             img.onerror = () => {
@@ -1135,9 +1273,6 @@ async function serveMainPage() {
               loadingEl.textContent = 'Failed to load image';
               loadingEl.style.display = 'block';
             };
-            
-            // Set source to trigger load
-            img.src = imagePath;
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
@@ -1253,6 +1388,7 @@ async function serveMainPage() {
   `, {
     headers: {
       'Content-Type': 'text/html;charset=UTF-8',
+      // Cache HTML (static, client fetches random image)
       'Cache-Control': 'public, max-age=300'
     }
   });
