@@ -263,9 +263,17 @@ async function getRandomImage(env, corsHeaders) {
         c.url AS credit_url,
         c.social_handle AS credit_social_handle,
         c.platform AS credit_platform,
-        c.license AS credit_license
+        c.license AS credit_license,
+        c.artist_id,
+        a.name AS artist_name,
+        a.display_name AS artist_display_name,
+        a.avatar_url AS artist_avatar,
+        a.website_url AS artist_website,
+        a.twitter_handle AS artist_twitter,
+        a.verified AS artist_verified
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
+      LEFT JOIN artists a ON c.artist_id = a.id
       WHERE i.status = 'active'
       LIMIT 1 OFFSET ?
     `).bind(randomOffset).first();
@@ -335,9 +343,15 @@ async function getImages(env, params, corsHeaders) {
         i.alt_text,
         i.status,
         i.created_at,
-        c.name AS credit_name
+        c.name AS credit_name,
+        c.artist_id,
+        a.name AS artist_name,
+        a.display_name AS artist_display_name,
+        a.avatar_url AS artist_avatar,
+        a.verified AS artist_verified
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
+      LEFT JOIN artists a ON c.artist_id = a.id
       WHERE i.status = 'active'
       ORDER BY i.created_at DESC
       LIMIT ? OFFSET ?
