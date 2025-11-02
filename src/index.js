@@ -192,7 +192,17 @@ async function handleAPI(request, env, url) {
       case '/stats':
         return await getStats(env, corsHeaders);
       
+      case '/artists':
+        return await getPublicArtists(env, url.searchParams, corsHeaders);
+      
       default:
+        // Check for /artists/:id pattern
+        const artistMatch = path.match(/^\/artists\/(\d+)$/);
+        if (artistMatch) {
+          const artistId = parseInt(artistMatch[1]);
+          return await getPublicArtist(env, artistId, corsHeaders);
+        }
+        
         return new Response(JSON.stringify({ error: 'Not found' }), {
           status: 404,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -361,16 +371,161 @@ async function getStats(env, corsHeaders) {
       `SELECT COUNT(*) as count FROM credits WHERE id != 1`
     ).first();
 
+    const artistCount = await env.DB.prepare(
+      `SELECT COUNT(*) as count FROM artists`
+    ).first();
+
     return new Response(JSON.stringify({
       total_images: imageCount.count,
       total_tags: tagCount.count,
-      credited_artists: creditCount.count
+      credited_artists: creditCount.count,
+      total_artists: artistCount.count
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
     throw error;
+  }
+}
+
+// ============================================
+// PUBLIC ARTIST API HANDLERS
+// ============================================
+
+async function getPublicArtists(env, searchParams, corsHeaders) {
+  try {
+    const featured = searchParams.get('featured');
+    const limit = Math.min(parseInt(searchParams.get('limit')) || 50, 100);
+    const offset = parseInt(searchParams.get('offset')) || 0;
+
+    let query = `
+      SELECT 
+        a.id,
+        a.name,
+        a.display_name,
+        a.bio,
+        a.avatar_url,
+        a.website_url,
+        a.twitter_handle,
+        a.instagram_handle,
+        a.pixiv_id,
+        a.deviantart_username,
+        a.verified,
+        a.featured,
+        COUNT(DISTINCT i.id) AS images_count
+      FROM artists a
+      LEFT JOIN credits c ON a.id = c.artist_id
+      LEFT JOIN images i ON c.id = i.credit_id AND i.status = 'active'
+    `;
+
+    const params = [];
+    if (featured === 'true') {
+      query += ' WHERE a.featured = 1';
+    }
+
+    query += `
+      GROUP BY a.id
+      ORDER BY a.featured DESC, images_count DESC, a.name ASC
+      LIMIT ? OFFSET ?
+    `;
+    params.push(limit, offset);
+
+    const result = await env.DB.prepare(query).bind(...params).all();
+
+    return new Response(JSON.stringify({
+      artists: result.results,
+      count: result.results.length,
+      limit,
+      offset
+    }), {
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=1800' // Cache for 30 minutes
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching artists:', error);
+    return new Response(JSON.stringify({ error: 'Failed to fetch artists' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function getPublicArtist(env, artistId, corsHeaders) {
+  try {
+    const artist = await env.DB.prepare(`
+      SELECT 
+        a.id,
+        a.name,
+        a.display_name,
+        a.bio,
+        a.avatar_url,
+        a.website_url,
+        a.twitter_handle,
+        a.instagram_handle,
+        a.pixiv_id,
+        a.deviantart_username,
+        a.verified,
+        a.featured,
+        COUNT(DISTINCT c.id) AS credits_count,
+        COUNT(DISTINCT i.id) AS images_count
+      FROM artists a
+      LEFT JOIN credits c ON a.id = c.artist_id
+      LEFT JOIN images i ON c.id = i.credit_id AND i.status = 'active'
+      WHERE a.id = ?
+      GROUP BY a.id
+    `).bind(artistId).first();
+
+    if (!artist) {
+      return new Response(JSON.stringify({ error: 'Artist not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Get associated creator tags
+    const tags = await env.DB.prepare(`
+      SELECT t.id, t.name, t.display_name
+      FROM artist_tags at
+      JOIN tags t ON at.tag_id = t.id
+      WHERE at.artist_id = ?
+    `).bind(artistId).all();
+
+    // Get sample images
+    const images = await env.DB.prepare(`
+      SELECT 
+        i.id,
+        i.filename,
+        i.alt_text,
+        i.width,
+        i.height
+      FROM images i
+      JOIN credits c ON i.credit_id = c.id
+      WHERE c.artist_id = ? AND i.status = 'active'
+      ORDER BY i.created_at DESC
+      LIMIT 12
+    `).bind(artistId).all();
+
+    return new Response(JSON.stringify({
+      ...artist,
+      creator_tags: tags.results,
+      sample_images: images.results
+    }), {
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=1800' // Cache for 30 minutes
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching artist:', error);
+    return new Response(JSON.stringify({ error: 'Failed to fetch artist' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 }
 
