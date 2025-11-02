@@ -1273,6 +1273,13 @@ async function serveMainPage() {
                 expandBtn.style.display = 'none';
               }
             } else {
+              // Show "No tags" message when no tags are available
+              const noTagsMsg = document.createElement('span');
+              noTagsMsg.textContent = 'No Current Tags';
+              noTagsMsg.style.color = 'rgba(255, 255, 255, 0.7)';
+              noTagsMsg.style.fontSize = '0.85rem';
+              noTagsMsg.style.fontStyle = 'italic';
+              tagPreview.appendChild(noTagsMsg);
               expandBtn.style.display = 'none';
             }
 
