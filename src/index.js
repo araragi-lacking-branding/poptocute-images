@@ -176,7 +176,23 @@ async function handleAPI(request, env, url) {
 
 async function getRandomImage(env, corsHeaders) {
   try {
-    // Single optimized query with tags included - much faster than 2 queries
+    // PERFORMANCE FIX: Two-step approach is much faster than ORDER BY RANDOM() with JOINs
+    // Step 1: Get a random ID only (no JOINs, very fast)
+    const randomIdResult = await env.DB.prepare(`
+      SELECT id FROM images 
+      WHERE status = 'active'
+      ORDER BY RANDOM()
+      LIMIT 1
+    `).first();
+    
+    if (!randomIdResult) {
+      return new Response(JSON.stringify({ error: 'No images available' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // Step 2: Fetch full data for that specific ID (indexed lookup, very fast)
     const result = await env.DB.prepare(`
       SELECT
         i.id,
@@ -198,11 +214,9 @@ async function getRandomImage(env, corsHeaders) {
       LEFT JOIN image_tags it ON i.id = it.image_id
       LEFT JOIN tags t ON it.tag_id = t.id
       LEFT JOIN tag_categories tc ON t.category_id = tc.id
-      WHERE i.status = 'active'
+      WHERE i.id = ?
       GROUP BY i.id
-      ORDER BY RANDOM()
-      LIMIT 1
-    `).first();
+    `).bind(randomIdResult.id).first();
 
     if (!result) {
       return new Response(JSON.stringify({ error: 'No images available' }), {
@@ -311,43 +325,53 @@ async function serveMainPage(env) {
   // Pre-fetch random image data for SSR - eliminates API roundtrip
   let initialImageData = null;
   try {
-    const result = await env.DB.prepare(`
-      SELECT
-        i.id,
-        i.filename,
-        i.alt_text,
-        i.file_size,
-        i.width,
-        i.height,
-        i.mime_type,
-        c.name AS credit_name,
-        c.url AS credit_url,
-        c.social_handle AS credit_social_handle,
-        c.platform AS credit_platform,
-        GROUP_CONCAT(t.name || ':' || COALESCE(t.display_name, t.name) || ':' || tc.name, '|') as tags_data
-      FROM images i
-      LEFT JOIN credits c ON i.credit_id = c.id
-      LEFT JOIN image_tags it ON i.id = it.image_id
-      LEFT JOIN tags t ON it.tag_id = t.id
-      LEFT JOIN tag_categories tc ON t.category_id = tc.id
-      WHERE i.status = 'active'
-      GROUP BY i.id
+    // PERFORMANCE FIX: Two-step approach is much faster than ORDER BY RANDOM() with JOINs
+    // Step 1: Get a random ID only (no JOINs, very fast)
+    const randomIdResult = await env.DB.prepare(`
+      SELECT id FROM images 
+      WHERE status = 'active'
       ORDER BY RANDOM()
       LIMIT 1
     `).first();
     
-    if (result) {
-      // Parse tags
-      const tags = [];
-      if (result.tags_data) {
-        result.tags_data.split('|').forEach(part => {
-          const [name, display_name, category] = part.split(':');
-          if (name) tags.push({ name, display_name, category });
-        });
-      }
-      delete result.tags_data;
+    if (randomIdResult) {
+      // Step 2: Fetch full data for that specific ID (indexed lookup, very fast)
+      const result = await env.DB.prepare(`
+        SELECT
+          i.id,
+          i.filename,
+          i.alt_text,
+          i.file_size,
+          i.width,
+          i.height,
+          i.mime_type,
+          c.name AS credit_name,
+          c.url AS credit_url,
+          c.social_handle AS credit_social_handle,
+          c.platform AS credit_platform,
+          GROUP_CONCAT(t.name || ':' || COALESCE(t.display_name, t.name) || ':' || tc.name, '|') as tags_data
+        FROM images i
+        LEFT JOIN credits c ON i.credit_id = c.id
+        LEFT JOIN image_tags it ON i.id = it.image_id
+        LEFT JOIN tags t ON it.tag_id = t.id
+        LEFT JOIN tag_categories tc ON t.category_id = tc.id
+        WHERE i.id = ?
+        GROUP BY i.id
+      `).bind(randomIdResult.id).first();
       
-      initialImageData = { ...result, tags };
+      if (result) {
+        // Parse tags
+        const tags = [];
+        if (result.tags_data) {
+          result.tags_data.split('|').forEach(part => {
+            const [name, display_name, category] = part.split(':');
+            if (name) tags.push({ name, display_name, category });
+          });
+        }
+        delete result.tags_data;
+        
+        initialImageData = { ...result, tags };
+      }
     }
   } catch (error) {
     console.error('SSR image fetch error:', error);
