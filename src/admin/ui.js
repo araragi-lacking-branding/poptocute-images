@@ -626,6 +626,88 @@ export function generateAdminUI(activeView = 'images') {
           border-color: #4ecdc4;
         }
 
+        /* Status Management Styles */
+        .status-badge {
+          display: inline-block;
+          padding: 3px 10px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .status-active {
+          background: #e8f5e9;
+          color: #2e7d32;
+        }
+
+        .status-hidden {
+          background: #fff3e0;
+          color: #e65100;
+        }
+
+        .status-deleted {
+          background: #ffebee;
+          color: #c62828;
+        }
+
+        .status-controls {
+          display: flex;
+          gap: 8px;
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px solid #eee;
+        }
+
+        .status-btn {
+          padding: 6px 14px;
+          border: 1px solid;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .status-btn-show {
+          background: #e8f5e9;
+          border-color: #4caf50;
+          color: #2e7d32;
+        }
+
+        .status-btn-show:hover {
+          background: #4caf50;
+          color: white;
+        }
+
+        .status-btn-hide {
+          background: #fff3e0;
+          border-color: #ff9800;
+          color: #e65100;
+        }
+
+        .status-btn-hide:hover {
+          background: #ff9800;
+          color: white;
+        }
+
+        .status-btn-delete {
+          background: #ffebee;
+          border-color: #f44336;
+          color: #c62828;
+        }
+
+        .status-btn-delete:hover {
+          background: #f44336;
+          color: white;
+        }
+
+        .status-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
         .form-actions {
           display: flex;
           gap: 10px;
@@ -695,6 +777,18 @@ export function generateAdminUI(activeView = 'images') {
               <dt>Status:</dt>
               <dd id="info-status">—</dd>
             </dl>
+            
+            <div class="status-controls">
+              <button class="status-btn status-btn-show" id="btn-image-show" onclick="updateImageStatus('active')" disabled>
+                ✓ Show
+              </button>
+              <button class="status-btn status-btn-hide" id="btn-image-hide" onclick="updateImageStatus('hidden')" disabled>
+                👁 Hide
+              </button>
+              <button class="status-btn status-btn-delete" id="btn-image-delete" onclick="updateImageStatus('deleted')" disabled>
+                🗑 Delete
+              </button>
+            </div>
           </div>
 
           <div class="controls">
@@ -1098,6 +1192,9 @@ export function generateAdminUI(activeView = 'images') {
               data.width && data.height ? \`\${data.width} × \${data.height}\` : '—';
             document.getElementById('info-status').textContent = data.status;
             
+            // Update status buttons
+            updateImageStatusButtons(data.status);
+            
             activeTags.clear();
             (data.tags || []).forEach(tag => activeTags.add(tag.id));
             updateActiveTagsUI();
@@ -1169,6 +1266,62 @@ export function generateAdminUI(activeView = 'images') {
           } catch (error) {
             console.error('Failed to save:', error);
             alert('Error saving changes');
+          }
+        }
+
+        // Status Management Functions
+        function updateImageStatusButtons(currentStatus) {
+          const showBtn = document.getElementById('btn-image-show');
+          const hideBtn = document.getElementById('btn-image-hide');
+          const deleteBtn = document.getElementById('btn-image-delete');
+          
+          // Enable all buttons
+          showBtn.disabled = false;
+          hideBtn.disabled = false;
+          deleteBtn.disabled = false;
+          
+          // Disable the current status button
+          if (currentStatus === 'active') showBtn.disabled = true;
+          if (currentStatus === 'hidden') hideBtn.disabled = true;
+          if (currentStatus === 'deleted') deleteBtn.disabled = true;
+        }
+
+        async function updateImageStatus(newStatus) {
+          if (!currentImageId) return;
+          
+          const messages = {
+            active: 'Make this image visible to end users?',
+            hidden: 'Hide this image from end users? It will not appear in random selection.',
+            deleted: 'Mark this image as deleted? It will be hidden from end users.'
+          };
+          
+          if (!confirm(messages[newStatus])) return;
+          
+          // Extra confirmation for delete
+          if (newStatus === 'deleted') {
+            if (!confirm('Are you ABSOLUTELY SURE? This will hide the image from all public views.')) return;
+          }
+          
+          try {
+            const response = await fetch(\`/api/admin/images/\${currentImageId}/status\`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: newStatus })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+              document.getElementById('info-status').textContent = newStatus;
+              updateImageStatusButtons(newStatus);
+              alert(\`✓ Image status updated to: \${newStatus}\`);
+              await loadStats();
+            } else {
+              alert('Failed to update status: ' + (result.error || 'Unknown error'));
+            }
+          } catch (error) {
+            console.error('Failed to update status:', error);
+            alert('Error updating status');
           }
         }
 
@@ -1523,6 +1676,21 @@ export function generateAdminUI(activeView = 'images') {
                 </div>
               </div>
 
+              <div class="status-controls">
+                <strong>Artist Visibility:</strong> <span class="status-badge status-\${artist.status || 'active'}">\${artist.status || 'active'}</span>
+                <div style="margin-top: 8px;">
+                  <button type="button" class="status-btn status-btn-show" onclick="updateArtistStatus(\${artist.id}, 'active')" \${(artist.status || 'active') === 'active' ? 'disabled' : ''}>
+                    ✓ Show
+                  </button>
+                  <button type="button" class="status-btn status-btn-hide" onclick="updateArtistStatus(\${artist.id}, 'hidden')" \${artist.status === 'hidden' ? 'disabled' : ''}>
+                    👁 Hide (\${images.length} images)
+                  </button>
+                  <button type="button" class="status-btn status-btn-delete" onclick="updateArtistStatus(\${artist.id}, 'deleted')" \${artist.status === 'deleted' ? 'disabled' : ''}>
+                    🗑 Delete
+                  </button>
+                </div>
+              </div>
+
               <div class="form-actions">
                 <button type="submit" class="btn btn-primary">💾 Save Artist</button>
                 \${artist.id ? \`<button type="button" class="btn btn-danger" onclick="deleteArtist(\${artist.id})">🗑️ Delete</button>\` : ''}
@@ -1652,6 +1820,45 @@ export function generateAdminUI(activeView = 'images') {
             }
           } catch (error) {
             console.error('Delete error:', error);
+          }
+        }
+
+        async function updateArtistStatus(artistId, newStatus) {
+          const messages = {
+            active: 'Make this artist visible to end users?',
+            hidden: 'Hide this artist from end users? All images from this artist will be hidden.',
+            deleted: 'Mark this artist as deleted? All images from this artist will be hidden.'
+          };
+          
+          if (!confirm(messages[newStatus])) return;
+          
+          // Extra confirmation for delete or hide
+          if (newStatus === 'deleted') {
+            if (!confirm('Are you ABSOLUTELY SURE? This will hide all images from this artist.')) return;
+          } else if (newStatus === 'hidden') {
+            if (!confirm('This will affect all images credited to this artist. Continue?')) return;
+          }
+          
+          try {
+            const response = await fetch(\`/api/admin/artists/\${artistId}/status\`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: newStatus })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+              alert(\`✓ Artist status updated to: \${newStatus}\\nAffected images: \${result.affected_images || 0}\`);
+              await loadArtists();
+              await selectArtist(artistId);
+              await loadStats();
+            } else {
+              alert('Failed to update status: ' + (result.error || 'Unknown error'));
+            }
+          } catch (error) {
+            console.error('Failed to update status:', error);
+            alert('Error updating status');
           }
         }
 

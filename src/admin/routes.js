@@ -108,6 +108,18 @@ async function handleAdminAPI(request, env, url) {
       return await updateImageMetadata(request, env, imageId, corsHeaders);
     }
 
+    // PATCH /api/admin/images/:id/status - Update image status
+    if (path.match(/^\/images\/\d+\/status$/) && method === 'PATCH') {
+      const imageId = parseInt(path.split('/')[2]);
+      return await handleUpdateImageStatus(request, env, imageId, corsHeaders);
+    }
+
+    // PATCH /api/admin/tags/:id/status - Update tag status
+    if (path.match(/^\/tags\/\d+\/status$/) && method === 'PATCH') {
+      const tagId = parseInt(path.split('/')[2]);
+      return await handleUpdateTagStatus(request, env, tagId, corsHeaders);
+    }
+
     // POST /api/admin/upload - Upload new image
     if (path === '/upload' && method === 'POST') {
       return await handleUpload(request, env);
@@ -152,6 +164,12 @@ async function handleAdminAPI(request, env, url) {
     if (path.match(/^\/artists\/\d+$/) && method === 'DELETE') {
       const artistId = parseInt(path.split('/').pop());
       return await handleDeleteArtist(env, artistId, corsHeaders);
+    }
+
+    // PATCH /api/admin/artists/:id/status - Update artist status
+    if (path.match(/^\/artists\/\d+\/status$/) && method === 'PATCH') {
+      const artistId = parseInt(path.split('/')[2]);
+      return await handleUpdateArtistStatus(request, env, artistId, corsHeaders);
     }
 
     // GET /api/admin/artists/:id/images - Get artist's images
@@ -693,6 +711,165 @@ async function handleUnlinkArtistTag(env, artistId, tagId, corsHeaders) {
       error: error.message
     }), {
       status: 400,
+      headers: corsHeaders
+    });
+  }
+}
+
+// ============================================
+// STATUS MANAGEMENT HANDLERS
+// ============================================
+
+// PATCH /api/admin/images/:id/status
+async function handleUpdateImageStatus(request, env, imageId, corsHeaders) {
+  try {
+    const { status } = await request.json();
+    
+    // Validate status
+    const validStatuses = ['active', 'hidden', 'deleted'];
+    if (!validStatuses.includes(status)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid status. Must be: active, hidden, or deleted'
+      }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
+
+    // Update image status
+    await env.DB.prepare(`
+      UPDATE images 
+      SET status = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(status, imageId).run();
+
+    // Trigger sync to update KV cache
+    await syncKVCache(env, corsHeaders);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: `Image status updated to ${status}`,
+      status
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error updating image status:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
+}
+
+// PATCH /api/admin/tags/:id/status
+async function handleUpdateTagStatus(request, env, tagId, corsHeaders) {
+  try {
+    const { status } = await request.json();
+    
+    // Validate status
+    const validStatuses = ['active', 'hidden', 'deleted'];
+    if (!validStatuses.includes(status)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid status. Must be: active, hidden, or deleted'
+      }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
+
+    // Get affected image count before update
+    const affectedCount = await env.DB.prepare(`
+      SELECT COUNT(DISTINCT image_id) as count
+      FROM image_tags
+      WHERE tag_id = ?
+    `).bind(tagId).first();
+
+    // Update tag status
+    await env.DB.prepare(`
+      UPDATE tags 
+      SET status = ?
+      WHERE id = ?
+    `).bind(status, tagId).run();
+
+    // Trigger sync to update KV cache
+    await syncKVCache(env, corsHeaders);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: `Tag status updated to ${status}`,
+      status,
+      affected_images: affectedCount.count
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error updating tag status:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
+}
+
+// PATCH /api/admin/artists/:id/status
+async function handleUpdateArtistStatus(request, env, artistId, corsHeaders) {
+  try {
+    const { status } = await request.json();
+    
+    // Validate status
+    const validStatuses = ['active', 'hidden', 'deleted'];
+    if (!validStatuses.includes(status)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid status. Must be: active, hidden, or deleted'
+      }), {
+        status: 400,
+        headers: corsHeaders
+      });
+    }
+
+    // Get affected image count before update
+    const affectedCount = await env.DB.prepare(`
+      SELECT COUNT(DISTINCT i.id) as count
+      FROM images i
+      JOIN credits c ON i.credit_id = c.id
+      WHERE c.artist_id = ?
+    `).bind(artistId).first();
+
+    // Update artist status
+    await env.DB.prepare(`
+      UPDATE artists 
+      SET status = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(status, artistId).run();
+
+    // Trigger sync to update KV cache
+    await syncKVCache(env, corsHeaders);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: `Artist status updated to ${status}`,
+      status,
+      affected_images: affectedCount.count
+    }), {
+      headers: corsHeaders
+    });
+  } catch (error) {
+    console.error('Error updating artist status:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
       headers: corsHeaders
     });
   }
