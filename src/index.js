@@ -1215,11 +1215,26 @@ async function serveMainPage() {
             // Set alt text immediately
             img.alt = data.alt_text || 'Random cute image';
 
-            // Load image
-            // Handle filenames that may or may not include 'images/' prefix
-            const imagePath = data.filename.startsWith('images/')
-              ? \`/\${data.filename}\`
-              : \`/images/\${data.filename}\`;
+            // Use optimized URLs if available (progressive enhancement)
+            if (data.urls) {
+              // Modern browsers: use srcset for responsive images
+              img.srcset = \`
+                \${data.urls.mobile} 640w,
+                \${data.urls.tablet} 1024w,
+                \${data.urls.desktop} 1920w
+              \`.trim();
+              
+              img.sizes = '(max-width: 768px) 640px, (max-width: 1200px) 1024px, 1920px';
+              
+              // Fallback src
+              img.src = data.urls.optimized;
+            } else {
+              // Legacy fallback if urls field not present
+              const imagePath = data.filename.startsWith('images/')
+                ? \`/\${data.filename}\`
+                : \`/images/\${data.filename}\`;
+              img.src = imagePath;
+            }
 
             // Add loading state with delay for spinner
             imageContainer.classList.add('loading');
