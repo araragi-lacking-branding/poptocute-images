@@ -275,6 +275,13 @@ async function getRandomImage(env, corsHeaders) {
       LEFT JOIN credits c ON i.credit_id = c.id
       LEFT JOIN artists a ON c.artist_id = a.id
       WHERE i.status = 'active'
+        AND (a.id IS NULL OR a.status = 'active')
+        AND i.id NOT IN (
+          SELECT DISTINCT it.image_id
+          FROM image_tags it
+          JOIN tags t ON it.tag_id = t.id
+          WHERE t.status IN ('hidden', 'deleted')
+        )
       LIMIT 1 OFFSET ?
     `).bind(randomOffset).first();
 
@@ -285,13 +292,13 @@ async function getRandomImage(env, corsHeaders) {
       });
     }
 
-    // Get tags separately - fast indexed lookup
+    // Get tags separately - fast indexed lookup (only active tags)
     const tagsResult = await env.DB.prepare(`
       SELECT t.name, t.display_name, tc.name as category
       FROM image_tags it
       JOIN tags t ON it.tag_id = t.id
       JOIN tag_categories tc ON t.category_id = tc.id
-      WHERE it.image_id = ?
+      WHERE it.image_id = ? AND t.status = 'active'
       ORDER BY tc.sort_order, t.name
     `).bind(result.id).all();
 
@@ -353,6 +360,13 @@ async function getImages(env, params, corsHeaders) {
       LEFT JOIN credits c ON i.credit_id = c.id
       LEFT JOIN artists a ON c.artist_id = a.id
       WHERE i.status = 'active'
+        AND (a.id IS NULL OR a.status = 'active')
+        AND i.id NOT IN (
+          SELECT DISTINCT it.image_id
+          FROM image_tags it
+          JOIN tags t ON it.tag_id = t.id
+          WHERE t.status IN ('hidden', 'deleted')
+        )
       ORDER BY i.created_at DESC
       LIMIT ? OFFSET ?
     `).bind(limit, offset).all();
@@ -373,12 +387,24 @@ async function getImages(env, params, corsHeaders) {
 
 async function getStats(env, corsHeaders) {
   try {
-    const imageCount = await env.DB.prepare(
-      `SELECT COUNT(*) as count FROM images WHERE status = 'active'`
-    ).first();
+    // Count only eligible images (active, not hidden by tags/artists)
+    const imageCount = await env.DB.prepare(`
+      SELECT COUNT(*) as count 
+      FROM images i
+      LEFT JOIN credits c ON i.credit_id = c.id
+      LEFT JOIN artists a ON c.artist_id = a.id
+      WHERE i.status = 'active'
+        AND (a.id IS NULL OR a.status = 'active')
+        AND i.id NOT IN (
+          SELECT DISTINCT it.image_id
+          FROM image_tags it
+          JOIN tags t ON it.tag_id = t.id
+          WHERE t.status IN ('hidden', 'deleted')
+        )
+    `).first();
 
     const tagCount = await env.DB.prepare(
-      `SELECT COUNT(*) as count FROM tags`
+      `SELECT COUNT(*) as count FROM tags WHERE status = 'active'`
     ).first();
 
     const creditCount = await env.DB.prepare(
@@ -386,7 +412,7 @@ async function getStats(env, corsHeaders) {
     ).first();
 
     const artistCount = await env.DB.prepare(
-      `SELECT COUNT(*) as count FROM artists`
+      `SELECT COUNT(*) as count FROM artists WHERE status = 'active'`
     ).first();
 
     return new Response(JSON.stringify({

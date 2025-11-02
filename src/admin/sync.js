@@ -8,12 +8,21 @@
 export async function syncKVCache(env) {
   console.log('Starting D1 → KV sync...');
 
-  // Query D1 for all active images
+  // Query D1 for all eligible active images (excluding hidden artists/tags)
   const results = await env.DB.prepare(`
-    SELECT filename 
-    FROM images 
-    WHERE status = 'active'
-    ORDER BY created_at DESC
+    SELECT i.filename
+    FROM images i
+    LEFT JOIN credits c ON i.credit_id = c.id
+    LEFT JOIN artists a ON c.artist_id = a.id
+    WHERE i.status = 'active'
+      AND (a.id IS NULL OR a.status = 'active')
+      AND i.id NOT IN (
+        SELECT DISTINCT it.image_id
+        FROM image_tags it
+        JOIN tags t ON it.tag_id = t.id
+        WHERE t.status IN ('hidden', 'deleted')
+      )
+    ORDER BY i.created_at DESC
   `).all();
 
   if (!results.success) {
