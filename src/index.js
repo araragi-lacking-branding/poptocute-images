@@ -4,6 +4,28 @@ import { handleAdminRequest } from './admin/routes.js';
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const userAgent = request.headers.get('User-Agent') || '';
+    const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
+    const cfRay = request.headers.get('CF-Ray') || 'Unknown';
+    const country = request.headers.get('CF-IPCountry') || 'Unknown';
+    
+    // Block aggressive polling bot
+    if (userAgent.includes('curly')) {
+      console.log(`[BLOCKED-BOT] IP: ${ip} | Country: ${country} | UA: curly-0.0.1 | Ray: ${cfRay}`);
+      return new Response('Rate limit exceeded. Please reduce request frequency.', { 
+        status: 429,
+        headers: {
+          'Retry-After': '300', // 5 minutes
+          'Content-Type': 'text/plain'
+        }
+      });
+    }
+    
+    // Log all requests to root path with detailed info
+    if (url.pathname === '/') {
+      // Only log non-cached requests to reduce noise
+      console.log(`[REQUEST] ${ip} | ${country} | ${userAgent.substring(0, 50)} | ${cfRay}`);
+    }
     
     // Admin routes
     if (url.pathname.startsWith('/admin')) {
@@ -31,24 +53,9 @@ export default {
     }
 
     // Serve images from R2
-    // For WebP, users/browsers should request via /cdn-cgi/image/ path directly
-    if (url.pathname.startsWith('/images/') || url.pathname.includes('/cdn-cgi/image/')) {
-      // Extract actual image path
-      let filename;
-      
-      if (url.pathname.includes('/cdn-cgi/image/')) {
-        // Path like: /cdn-cgi/image/format=webp/images/abc.png
-        // Extract: images/abc.png
-        const match = url.pathname.match(/\/images\/.+$/);
-        if (match) {
-          filename = match[0].substring(1); // Remove leading slash
-        } else {
-          return new Response('Invalid cdn-cgi path', { status: 400 });
-        }
-      } else {
-        // Regular path: /images/abc.png
-        filename = url.pathname.substring(1); // Remove leading slash
-      }
+    // DO NOT handle /cdn-cgi/image/ paths - let Cloudflare handle those by fetching from /images/
+    if (url.pathname.startsWith('/images/')) {
+      const filename = url.pathname.substring(1); // Remove leading slash: "images/abc.png"
       
       try {
         const object = await env.IMAGES.get(filename);
