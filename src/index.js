@@ -1251,9 +1251,6 @@ async function serveMainPage() {
               loadingEl.textContent = 'Failed to load image';
               loadingEl.style.display = 'block';
             };
-            
-            // Set source to trigger load
-            img.src = imagePath;
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
