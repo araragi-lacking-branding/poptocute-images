@@ -440,31 +440,6 @@ async function serveMainPage() {
           justify-content: center;
         }
 
-        .image-container::before {
-          content: "";
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          width: 40px;
-          height: 40px;
-          margin: -20px 0 0 -20px;
-          border: 3px solid #f3f3f3;
-          border-top: 3px solid #555;
-          border-radius: 50%;
-          opacity: 0;
-          transition: opacity 0.2s ease 0.3s;
-          animation: spin 1s linear infinite;
-        }
-
-        .image-container.loading::before {
-          opacity: 1;
-        }
-
-        @keyframes spin {
-          0% { transform: translate(-50%, -50%) rotate(0deg); }
-          100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-
         #randomImage {
           max-width: 100%;
           max-height: 85vh;
@@ -1212,9 +1187,6 @@ async function serveMainPage() {
             // Set alt text immediately
             img.alt = data.alt_text || 'Random cute image';
 
-            // Add loading state
-            imageContainer.classList.add('loading');
-
             // Preload image using decode() API for smooth rendering
             // This prevents flickering by ensuring the image is fully decoded before display
             const preloadImage = new Image();
@@ -1260,9 +1232,8 @@ async function serveMainPage() {
                 }
                 img.src = preloadImage.src;
                 
-                // Remove loading state and trigger fade-in simultaneously
+                // Trigger smooth fade-in
                 requestAnimationFrame(() => {
-                  imageContainer.classList.remove('loading');
                   img.classList.add('loaded');
                 });
 
@@ -1288,7 +1259,6 @@ async function serveMainPage() {
               .catch((error) => {
                 // Image failed to load
                 console.error('Image load error:', error);
-                imageContainer.classList.remove('loading');
                 loadingEl.textContent = 'Failed to load image';
                 loadingEl.style.display = 'block';
               });
