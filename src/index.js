@@ -438,6 +438,12 @@ async function serveMainPage() {
           display: flex;
           align-items: center;
           justify-content: center;
+          opacity: 0;
+          transition: opacity 0.2s ease-out;
+        }
+
+        .image-container.ready {
+          opacity: 1;
         }
 
         #randomImage {
@@ -1172,16 +1178,21 @@ async function serveMainPage() {
               throw new Error('No image available');
             }
 
-            // Set image dimensions BEFORE loading to prevent layout shift
+            // Set image dimensions and container aspect ratio BEFORE loading to prevent layout shift
             if (data.width && data.height) {
-              // Set explicit width and height attributes
-              // This tells the browser to reserve the correct space
+              // Calculate aspect ratio
+              const aspectRatio = data.width / data.height;
+              
+              // Set explicit dimensions on img element for browser to reserve space
               img.width = data.width;
               img.height = data.height;
               
-              // Set aspect ratio on container to prevent resize
-              const aspectRatio = data.width / data.height;
+              // Set aspect ratio on container immediately - browser will size it correctly
+              // This prevents the container from resizing when image loads
               imageContainer.style.aspectRatio = aspectRatio.toString();
+              
+              // Show container now that it's properly sized
+              imageContainer.classList.add('ready');
             }
 
             // Set alt text immediately
