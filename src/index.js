@@ -1244,6 +1244,28 @@ async function serveMainPage() {
               // Remove loading state and show image
               imageContainer.classList.remove('loading');
               img.classList.add('loaded');
+              
+              // Pre-warm Cloudflare cache for next random image
+              // This doesn't affect the user experience but speeds up the next image
+              setTimeout(() => {
+                fetch('/api/random', {
+                  headers: { 'Accept': 'application/json' },
+                  priority: 'low'
+                })
+                .then(res => res.json())
+                .then(nextData => {
+                  if (nextData.urls) {
+                    // Prefetch the optimized versions to warm CF cache
+                    // Use link rel=prefetch for low-priority background loading
+                    const prefetchLink = document.createElement('link');
+                    prefetchLink.rel = 'prefetch';
+                    prefetchLink.as = 'image';
+                    prefetchLink.href = nextData.urls.optimized;
+                    document.head.appendChild(prefetchLink);
+                  }
+                })
+                .catch(() => {}); // Silent fail - this is just optimization
+              }, 1000); // Wait 1s after image loads to avoid competing for bandwidth
             };
 
             img.onerror = () => {
