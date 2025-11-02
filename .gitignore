@@ -10,3 +10,19 @@ node_modules/
 
 # Test files
 test-lcp.html
+
+# Build outputs
+build/
+dist/
+
+# Backups
+backups/
+*.backup
+*.backup[0-9]
+
+# Images (stored in R2)
+public/images/
+
+# OS files
+Thumbs.db
+desktop.ini
