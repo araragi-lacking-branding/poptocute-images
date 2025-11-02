@@ -32,8 +32,25 @@ async function handleAdminAPI(request, env, url) {
   const path = url.pathname.replace('/api/admin', '');
   const method = request.method;
 
+  // CORS configuration with allowed origins
+  const origin = request.headers.get('Origin');
+  const allowedOrigins = [
+    'https://cutetopop.com',
+    'https://www.cutetopop.com',
+    'http://localhost:8787',      // Wrangler dev
+    'http://127.0.0.1:8787',
+    'http://localhost:3000',       // Alternative dev server
+    'http://127.0.0.1:3000'
+  ];
+
+  // Check if origin matches allowed list or is a subdomain of cutetopop.com
+  const isAllowed = origin && (
+    allowedOrigins.includes(origin) ||
+    origin.match(/^https:\/\/([a-z0-9-]+\.)?cutetopop\.com$/)
+  );
+
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': isAllowed ? origin : 'https://cutetopop.com',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json'
