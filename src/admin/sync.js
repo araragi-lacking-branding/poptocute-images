@@ -99,15 +99,40 @@ export async function syncKVCache(env) {
 
 /**
  * HTTP handler for manual sync requests
+ * Also triggers metadata backfill for all images
  */
 export async function handleSync(env) {
   try {
-    const result = await syncKVCache(env);
+    // Import metadata functions
+    const { validateMetadata, backfillMetadata } = await import('./metadata-sync.js');
+    
+    // 1. Sync KV cache
+    const syncResult = await syncKVCache(env);
+    console.log(`✅ KV sync: ${syncResult.count} images`);
+
+    // 2. Validate and backfill metadata
+    const validation = await validateMetadata(env);
+    console.log(`📊 Metadata validation: ${validation.needsBackfill} images need backfill`);
+    
+    let backfillResult = null;
+    if (validation.needsBackfill > 0) {
+      backfillResult = await backfillMetadata(env, { 
+        dryRun: false, 
+        limit: undefined, 
+        forceAll: false 
+      });
+      console.log(`✅ Metadata backfill: ${backfillResult.updated} images updated`);
+    }
 
     return new Response(JSON.stringify({
       success: true,
-      count: result.count,
-      timestamp: result.timestamp
+      count: syncResult.count,
+      timestamp: syncResult.timestamp,
+      metadata: {
+        validated: validation.total,
+        backfilled: backfillResult?.updated || 0,
+        failed: backfillResult?.failed || 0
+      }
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
