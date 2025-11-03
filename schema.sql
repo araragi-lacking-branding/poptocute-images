@@ -10,7 +10,7 @@
 -- ============================================
 CREATE TABLE artists (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE, -- Case-insensitive to prevent "Studio-Gainax" vs "studio-gainax" duplicates
   display_name TEXT,
   bio TEXT,
   avatar_url TEXT,
