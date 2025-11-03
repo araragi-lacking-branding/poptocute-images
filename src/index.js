@@ -302,6 +302,56 @@ async function getRandomImage(env, corsHeaders) {
       ORDER BY tc.sort_order, t.name
     `).bind(result.id).all();
 
+    // CREDITS FIX: If no artist info from credits, try to derive from creator tags
+    // This allows credits to work even when credit_id or artist_id aren't set
+    if (!result.artist_id || !result.artist_name) {
+      const creatorFromTag = await env.DB.prepare(`
+        SELECT 
+          a.id AS artist_id,
+          a.name AS artist_name,
+          a.display_name AS artist_display_name,
+          a.avatar_url AS artist_avatar,
+          a.website_url AS artist_website,
+          a.twitter_handle AS artist_twitter,
+          a.verified AS artist_verified,
+          c.name AS credit_name,
+          c.url AS credit_url,
+          c.social_handle AS credit_social_handle,
+          c.platform AS credit_platform,
+          c.license AS credit_license
+        FROM image_tags it
+        JOIN tags t ON it.tag_id = t.id
+        JOIN tag_categories tc ON t.category_id = tc.id
+        JOIN artist_tags at ON t.id = at.tag_id
+        JOIN artists a ON at.artist_id = a.id
+        LEFT JOIN credits c ON a.id = c.artist_id
+        WHERE it.image_id = ?
+          AND tc.name = 'creator'
+          AND a.status = 'active'
+        LIMIT 1
+      `).bind(result.id).first();
+
+      if (creatorFromTag) {
+        // Override with creator tag info
+        result.artist_id = creatorFromTag.artist_id;
+        result.artist_name = creatorFromTag.artist_name;
+        result.artist_display_name = creatorFromTag.artist_display_name;
+        result.artist_avatar = creatorFromTag.artist_avatar;
+        result.artist_website = creatorFromTag.artist_website;
+        result.artist_twitter = creatorFromTag.artist_twitter;
+        result.artist_verified = creatorFromTag.artist_verified;
+        
+        // Also update credit info if available and better than current
+        if (creatorFromTag.credit_name && (!result.credit_name || result.credit_name === 'Unknown Artist')) {
+          result.credit_name = creatorFromTag.credit_name;
+          result.credit_url = creatorFromTag.credit_url;
+          result.credit_social_handle = creatorFromTag.credit_social_handle;
+          result.credit_platform = creatorFromTag.credit_platform;
+          result.credit_license = creatorFromTag.credit_license;
+        }
+      }
+    }
+
     // Generate optimized image URLs using Cloudflare Image Resizing
     // These only work in production (not local dev)
     const baseUrl = '/cdn-cgi/image';
@@ -1484,8 +1534,10 @@ async function serveMainPage() {
             const artistName = document.getElementById('artistName');
             const artistSocial = document.getElementById('artistSocial');
 
-            // Determine if artist is unknown
-            const isUnknown = !data.credit_name || data.credit_name === 'Unknown Artist';
+            // Prefer artist profile data over generic credits
+            const displayName = data.artist_display_name || data.artist_name || data.credit_name;
+            const artistUrl = data.artist_website || data.credit_url;
+            const isUnknown = !displayName || displayName === 'Unknown Artist';
 
             if (isUnknown) {
               // Show unknown artist with help option
@@ -1499,18 +1551,36 @@ async function serveMainPage() {
               artistSocial.innerHTML = \`<span class="artist-credit-help">Know who created this? <a href="mailto:lambda@cutetopop.com?subject=Artist Attribution - \${encodeURIComponent(data.filename)}&body=\${emailBody}">Help us attribute</a></span>\`;
             } else {
               // Build artist name (with or without link)
-              if (data.credit_url) {
-                artistName.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">\${escapeHtml(data.credit_name)}</a>\`;
+              if (artistUrl) {
+                artistName.innerHTML = \`<a href="\${escapeHtml(artistUrl)}" target="_blank" rel="noopener noreferrer">\${escapeHtml(displayName)}</a>\`;
               } else {
-                artistName.innerHTML = escapeHtml(data.credit_name);
+                artistName.innerHTML = escapeHtml(displayName);
               }
 
-              // Build social media link - only if available
-              if (data.credit_social_handle && data.credit_platform) {
+              // Build social media links - prioritize artist profile data
+              const socialLinks = [];
+              
+              // Twitter
+              if (data.artist_twitter) {
+                socialLinks.push(\`<a href="https://twitter.com/\${escapeHtml(data.artist_twitter)}" target="_blank" rel="noopener noreferrer">Twitter</a>\`);
+              }
+              
+              // Website (if different from main link)
+              if (data.artist_website && artistUrl !== data.artist_website) {
+                socialLinks.push(\`<a href="\${escapeHtml(data.artist_website)}" target="_blank" rel="noopener noreferrer">Website</a>\`);
+              }
+              
+              // Fallback to credit social handle
+              if (socialLinks.length === 0 && data.credit_social_handle && data.credit_platform) {
                 const platformDisplay = data.credit_platform.charAt(0).toUpperCase() + data.credit_platform.slice(1);
-                artistSocial.innerHTML = \`<a href="\${escapeHtml(data.credit_url || '#')}" target="_blank" rel="noopener noreferrer">@\${escapeHtml(data.credit_social_handle)} on \${escapeHtml(platformDisplay)}</a>\`;
-              } else if (data.credit_url) {
-                artistSocial.innerHTML = \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">View Profile</a>\`;
+                socialLinks.push(\`<a href="\${escapeHtml(data.credit_url || '#')}" target="_blank" rel="noopener noreferrer">@\${escapeHtml(data.credit_social_handle)} on \${escapeHtml(platformDisplay)}</a>\`);
+              } else if (socialLinks.length === 0 && artistUrl) {
+                socialLinks.push(\`<a href="\${escapeHtml(artistUrl)}" target="_blank" rel="noopener noreferrer">View Profile</a>\`);
+              }
+              
+              // Display social links
+              if (socialLinks.length > 0) {
+                artistSocial.innerHTML = socialLinks.join(' · ');
               } else {
                 artistSocial.innerHTML = '';
               }
