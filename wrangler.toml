@@ -22,6 +22,10 @@ enabled = true
 persist = true
 head_sampling_rate = 1
 
+# Smart Placement for optimal worker execution location
+[placement]
+mode = "smart"
+
 # D1 Database binding
 # Allows worker to access database via env.DB
 [[d1_databases]]
