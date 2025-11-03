@@ -2,6 +2,25 @@
 // Artist profile management operations
 
 /**
+ * Normalize text for consistent storage and comparison
+ * Prevents duplicates from whitespace, special dashes, and other variations
+ * @param {string} text - Text to normalize
+ * @returns {string} Normalized text
+ */
+function normalizeText(text) {
+  if (!text) return '';
+  
+  return text
+    .trim()                          // Remove leading/trailing whitespace
+    .replace(/\s+/g, ' ')            // Collapse multiple spaces to single space
+    .replace(/[_\u2013\u2014]/g, '-') // Replace underscore, en-dash (–) and em-dash (—) with hyphen
+    .replace(/[\u2018\u2019]/g, "'") // Replace smart single quotes with straight quotes
+    .replace(/[\u201C\u201D]/g, '"') // Replace smart double quotes with straight quotes
+    .replace(/\s*-\s*/g, '-')        // Remove spaces around hyphens: "studio - gainax" → "studio-gainax"
+    .toLowerCase();                  // Lowercase for case-insensitive comparison
+}
+
+/**
  * Get all artist profiles with optional filtering
  * @param {Object} env - Worker environment bindings
  * @param {Object} options - Query options (featured, search, limit, offset)
@@ -113,15 +132,23 @@ export async function getArtistById(env, artistId) {
  * @returns {Promise<Object|null>} Artist profile or null if not found
  */
 export async function getArtistByName(env, name) {
-  const result = await env.DB.prepare(`
-    SELECT * FROM artists WHERE name = ?
-  `).bind(name).first();
+  const normalizedName = normalizeText(name);
   
-  if (!result) return null;
+  // Search for artists with matching normalized names
+  const result = await env.DB.prepare(`
+    SELECT * FROM artists
+  `).all();
+  
+  // Find match by comparing normalized names
+  const match = result.results.find(artist => 
+    normalizeText(artist.name) === normalizedName
+  );
+  
+  if (!match) return null;
   
   return {
-    ...result,
-    other_links: result.other_links ? JSON.parse(result.other_links) : []
+    ...match,
+    other_links: match.other_links ? JSON.parse(match.other_links) : []
   };
 }
 
@@ -153,10 +180,15 @@ export async function createArtist(env, artistData) {
     throw new Error('Artist name is required');
   }
   
-  // Check if artist already exists
-  const existing = await getArtistByName(env, name);
+  // Clean the name (trim and remove excessive whitespace) but preserve intentional formatting
+  const cleanedName = name
+    .trim()
+    .replace(/\s+/g, ' ');  // Only collapse multiple spaces to single space
+  
+  // Check if artist already exists using normalized comparison (but don't store normalized)
+  const existing = await getArtistByName(env, cleanedName);
   if (existing) {
-    throw new Error(`Artist with name "${name}" already exists`);
+    throw new Error(`Artist with name "${cleanedName}" already exists (found as "${existing.name}")`);
   }
   
   const result = await env.DB.prepare(`
@@ -166,7 +198,7 @@ export async function createArtist(env, artistData) {
       other_links, verified, featured, notes, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).bind(
-    name,
+    cleanedName,  // Store the cleaned name (preserves underscores, hyphens, etc.)
     display_name || null,
     bio || null,
     avatar_url || null,
@@ -197,17 +229,17 @@ export async function createArtist(env, artistData) {
     if (creatorCategory) {
       const existingTag = await env.DB.prepare(
         `SELECT id FROM tags WHERE name = ? AND category_id = ?`
-      ).bind(name, creatorCategory.id).first();
+      ).bind(cleanedName, creatorCategory.id).first();
 
       let tagId;
       if (existingTag) {
         tagId = existingTag.id;
       } else {
-        // Create creator tag
+        // Create creator tag with cleaned name (preserves original formatting)
         const tagResult = await env.DB.prepare(`
           INSERT INTO tags (name, display_name, category_id)
           VALUES (?, ?, ?)
-        `).bind(name, display_name || name, creatorCategory.id).run();
+        `).bind(cleanedName, display_name || name.trim(), creatorCategory.id).run();
         
         tagId = tagResult.meta.last_row_id;
       }
@@ -238,6 +270,21 @@ export async function updateArtist(env, artistId, updates) {
   const existing = await getArtistById(env, artistId);
   if (!existing) {
     throw new Error('Artist not found');
+  }
+  
+  // If updating name, clean it and check for conflicts
+  if (updates.name) {
+    const cleanedName = updates.name
+      .trim()
+      .replace(/\s+/g, ' ');  // Only collapse multiple spaces
+    
+    // Check if another artist has this name (using normalized comparison)
+    const conflict = await getArtistByName(env, cleanedName);
+    if (conflict && conflict.id !== artistId) {
+      throw new Error(`Artist with name "${cleanedName}" already exists (found as "${conflict.name}")`);
+    }
+    
+    updates.name = cleanedName;  // Store cleaned name (preserves original formatting)
   }
   
   const allowedFields = [

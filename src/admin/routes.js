@@ -313,7 +313,14 @@ async function createTag(request, env, corsHeaders) {
       });
     }
 
-    const tagSlug = name.toLowerCase().replace(/\s+/g, '-');
+    // Normalize tag name - remove leading/trailing spaces, collapse whitespace, convert special chars
+    const tagSlug = name
+      .trim()
+      .replace(/\s+/g, '-')           // Collapse spaces to hyphens
+      .replace(/[\u2013\u2014]/g, '-') // Replace en-dash and em-dash with hyphen
+      .replace(/[\u2018\u2019]/g, "'") // Replace smart quotes
+      .replace(/[\u201C\u201D]/g, '"')
+      .toLowerCase();
 
     // Create tag
     const result = await env.DB.prepare(`
@@ -321,7 +328,7 @@ async function createTag(request, env, corsHeaders) {
       VALUES (?, ?, ?)
     `).bind(
       tagSlug,
-      display_name || name,
+      display_name || name.trim(),  // Use trimmed original for display
       categoryResult.id
     ).run();
 
@@ -343,7 +350,7 @@ async function createTag(request, env, corsHeaders) {
           const artistResult = await env.DB.prepare(`
             INSERT INTO artists (name, display_name, verified, featured, updated_at)
             VALUES (?, ?, 0, 0, datetime('now'))
-          `).bind(tagSlug, display_name || name).run();
+          `).bind(tagSlug, display_name || name.trim()).run();
           
           artistId = artistResult.meta.last_row_id;
         }

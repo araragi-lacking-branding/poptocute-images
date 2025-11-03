@@ -1026,6 +1026,15 @@ export function generateAdminUI(activeView = 'images') {
 
         function toggleTag(tagId, category) {
           const tagElement = document.querySelector(\`[data-tag-id="\${tagId}"]\`);
+          
+          // Check if tag is already active - prevent duplicate addition
+          if (activeTags.has(tagId) && !tagElement.classList.contains('active')) {
+            // This shouldn't happen, but safeguard against inconsistency
+            console.warn('Tag already in active set but not visually marked');
+            tagElement.classList.add('active');
+            return;
+          }
+          
           tagElement.classList.toggle('active');
           
           if (activeTags.has(tagId)) {
