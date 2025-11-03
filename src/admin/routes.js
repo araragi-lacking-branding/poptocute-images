@@ -4,6 +4,7 @@
 import { generateAdminUI } from './ui.js';
 import { handleSync, syncKVCache } from './sync.js';
 import { handleUpload } from './upload.js';
+import { handleMetadataBackfill, handleMetadataValidation } from './metadata-sync.js';
 import {
   getAllArtists,
   getArtistById,
@@ -137,6 +138,21 @@ async function handleAdminAPI(request, env, url) {
     // POST /api/admin/sync-kv - Sync D1 to KV cache
     if (path === '/sync-kv' && method === 'POST') {
       return await syncKVCache(env, corsHeaders);
+    }
+
+    // ============================================
+    // METADATA SYNC ROUTES
+    // ============================================
+
+    // POST /api/admin/metadata/backfill - Backfill metadata for images
+    // Query params: ?dry-run=true&limit=10&force-all=false
+    if (path === '/metadata/backfill' && method === 'POST') {
+      return await handleMetadataBackfill(request, env, url);
+    }
+
+    // GET /api/admin/metadata/validate - Check metadata completeness
+    if (path === '/metadata/validate' && method === 'GET') {
+      return await handleMetadataValidation(env);
     }
 
     // ============================================
