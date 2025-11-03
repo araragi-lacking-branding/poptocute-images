@@ -676,6 +676,9 @@ async function serveMainPage() {
           display: flex;
           align-items: center;
           justify-content: center;
+          /* Default aspect ratio prevents CLS - will be overridden by inline style */
+          aspect-ratio: 4 / 3;
+          min-height: 300px;
         }
 
         #randomImage {
@@ -1416,6 +1419,16 @@ async function serveMainPage() {
               // Browser will reserve correct space based on these
               img.width = data.width;
               img.height = data.height;
+              
+              // Set container aspect ratio immediately to prevent CLS
+              // This locks in the exact space needed before image loads
+              const aspectRatio = data.width / data.height;
+              imageContainer.style.aspectRatio = `${aspectRatio}`;
+              
+              // The CSS max-height: 85vh (or responsive values) will automatically
+              // constrain the container if the aspect ratio would make it too tall.
+              // The img element's object-fit: contain ensures the image fits perfectly
+              // within the container without being cut off.
             }
 
             // Set alt text immediately
