@@ -631,7 +631,9 @@ async function serveMainPage(env) {
     
     // Generate preload hint for the LCP image
     if (initialImageData?.urls?.optimized) {
-      preloadLink = `<link rel="preload" as="image" href="${initialImageData.urls.optimized}" fetchpriority="high">`;
+      // Use responsive preload with imagesrcset for better performance
+      // sizes reflects actual viewport usage: 95vw on mobile, 90vw tablet, 85vw desktop (with max-width constraints)
+      preloadLink = `<link rel="preload" as="image" href="${initialImageData.urls.optimized}" imagesrcset="${initialImageData.urls.mobile} 640w, ${initialImageData.urls.tablet} 1024w, ${initialImageData.urls.desktop} 1920w" imagesizes="(max-width: 768px) 95vw, (max-width: 1200px) 90vw, 85vw" fetchpriority="high">`;
     } else if (initialImageData?.filename) {
       const imagePath = initialImageData.filename.startsWith('images/')
         ? `/${initialImageData.filename}`
@@ -1466,81 +1468,112 @@ async function serveMainPage(env) {
             // Set alt text immediately
             img.alt = data.alt_text || 'Random cute image';
 
-            // Preload image using decode() API for smooth rendering
-            // This prevents flickering by ensuring the image is fully decoded before display
-            const preloadImage = new Image();
-            
-            // Set up responsive images with srcset
-            if (data.urls) {
-              preloadImage.srcset = \`
+            // When we have SSR data, the browser already has a preload hint from HTML
+            // So we can directly set src/srcset on the img element for faster display
+            if (INITIAL_IMAGE_DATA && data.urls) {
+              // Browser already started fetching via preload - just set the img attributes
+              img.srcset = \`
                 \${data.urls.mobile} 640w,
                 \${data.urls.tablet} 1024w,
                 \${data.urls.desktop} 1920w
               \`.trim();
-              preloadImage.sizes = '(max-width: 768px) 640px, (max-width: 1200px) 1024px, 1920px';
-              preloadImage.src = data.urls.optimized;
+              // Sizes should match CSS: 95vw mobile, 90vw tablet, 85vw desktop
+              img.sizes = '(max-width: 768px) 95vw, (max-width: 1200px) 90vw, 85vw';
+              img.src = data.urls.optimized;
+              
+              // Use decode() for smooth rendering if available
+              if (img.decode) {
+                img.decode()
+                  .then(() => {
+                    img.classList.add('loaded');
+                  })
+                  .catch(() => {
+                    // Decode failed, just show the image anyway
+                    img.classList.add('loaded');
+                  });
+              } else {
+                // Older browsers - use onload event
+                img.onload = () => img.classList.add('loaded');
+              }
             } else {
-              // Legacy fallback if urls field not present
-              const imagePath = data.filename.startsWith('images/')
-                ? \`/\${data.filename}\`
-                : \`/images/\${data.filename}\`;
-              preloadImage.src = imagePath;
-            }
+              // No SSR data - need to preload manually
+              // Preload image using decode() API for smooth rendering
+              // This prevents flickering by ensuring the image is fully decoded before display
+              const preloadImage = new Image();
+              
+              // Set up responsive images with srcset
+              if (data.urls) {
+                preloadImage.srcset = \`
+                  \${data.urls.mobile} 640w,
+                  \${data.urls.tablet} 1024w,
+                  \${data.urls.desktop} 1920w
+                \`.trim();
+                // Sizes should match CSS: 95vw mobile, 90vw tablet, 85vw desktop
+                preloadImage.sizes = '(max-width: 768px) 95vw, (max-width: 1200px) 90vw, 85vw';
+                preloadImage.src = data.urls.optimized;
+              } else {
+                // Legacy fallback if urls field not present
+                const imagePath = data.filename.startsWith('images/')
+                  ? \`/\${data.filename}\`
+                  : \`/images/\${data.filename}\`;
+                preloadImage.src = imagePath;
+              }
 
-            // Use decode() API if available (modern browsers)
-            // Falls back to onload for older browsers
-            const imageReady = preloadImage.decode ? 
-              preloadImage.decode().catch(() => {
-                // Decode failed, wait for onload instead
-                return new Promise((resolve, reject) => {
+              // Use decode() API if available (modern browsers)
+              // Falls back to onload for older browsers
+              const imageReady = preloadImage.decode ? 
+                preloadImage.decode().catch(() => {
+                  // Decode failed, wait for onload instead
+                  return new Promise((resolve, reject) => {
+                    preloadImage.onload = resolve;
+                    preloadImage.onerror = reject;
+                  });
+                }) :
+                new Promise((resolve, reject) => {
                   preloadImage.onload = resolve;
                   preloadImage.onerror = reject;
                 });
-              }) :
-              new Promise((resolve, reject) => {
-                preloadImage.onload = resolve;
-                preloadImage.onerror = reject;
-              });
 
-            imageReady
-              .then(() => {
-                // Image is fully loaded and decoded - transfer to display element
-                if (data.urls) {
-                  img.srcset = preloadImage.srcset;
-                  img.sizes = preloadImage.sizes;
-                }
-                img.src = preloadImage.src;
-                
-                // Trigger smooth fade-in
-                requestAnimationFrame(() => {
-                  img.classList.add('loaded');
+              imageReady
+                .then(() => {
+                  // Image is fully loaded and decoded - transfer to display element
+                  if (data.urls) {
+                    img.srcset = preloadImage.srcset;
+                    img.sizes = preloadImage.sizes;
+                  }
+                  img.src = preloadImage.src;
+                  
+                  // Trigger smooth fade-in
+                  requestAnimationFrame(() => {
+                    img.classList.add('loaded');
+                  });
+                })
+                .catch((error) => {
+                  // Image failed to load
+                  console.error('Image load error:', error);
+                  loadingEl.textContent = 'Failed to load image';
+                  loadingEl.style.display = 'block';
                 });
+            }
 
-                // Pre-warm Cloudflare cache for next random image
-                setTimeout(() => {
-                  fetch('/api/random', {
-                    headers: { 'Accept': 'application/json' },
-                    priority: 'low'
-                  })
-                  .then(res => res.json())
-                  .then(nextData => {
-                    if (nextData.urls) {
-                      const prefetchLink = document.createElement('link');
-                      prefetchLink.rel = 'prefetch';
-                      prefetchLink.as = 'image';
-                      prefetchLink.href = nextData.urls.optimized;
-                      document.head.appendChild(prefetchLink);
-                    }
-                  })
-                  .catch(() => {}); // Silent fail - this is just optimization
-                }, 1000);
+            // Pre-warm Cloudflare cache for next random image (performance optimization)
+            setTimeout(() => {
+              fetch('/api/random', {
+                headers: { 'Accept': 'application/json' },
+                priority: 'low'
               })
-              .catch((error) => {
-                // Image failed to load
-                console.error('Image load error:', error);
-                loadingEl.textContent = 'Failed to load image';
-                loadingEl.style.display = 'block';
-              });
+              .then(res => res.json())
+              .then(nextData => {
+                if (nextData.urls) {
+                  const prefetchLink = document.createElement('link');
+                  prefetchLink.rel = 'prefetch';
+                  prefetchLink.as = 'image';
+                  prefetchLink.href = nextData.urls.optimized;
+                  document.head.appendChild(prefetchLink);
+                }
+              })
+              .catch(() => {}); // Silent fail - this is just optimization
+            }, 1000);
 
             // Build tag preview (show top 5 tags)
             tagPreview.innerHTML = '';
