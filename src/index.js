@@ -1705,8 +1705,10 @@ async function serveMainPage(env) {
   `, {
     headers: {
       'Content-Type': 'text/html;charset=UTF-8',
-      // Cache HTML (static, client fetches random image)
-      'Cache-Control': 'public, max-age=300',
+      // No-cache for SSR HTML - each request gets a fresh random image
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
       // Security headers
       'X-Frame-Options': 'SAMEORIGIN',
       'X-Content-Type-Options': 'nosniff',
