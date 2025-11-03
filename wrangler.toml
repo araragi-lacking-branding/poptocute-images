@@ -23,6 +23,7 @@ invocation_logs = true
 binding = "DB"
 database_name = "cutetopop-db"
 database_id = "f9d232d7-69ed-4e19-8238-9970badd54d6"
+migrations_dir = "migrations"
 
 
 # KV Namespace for caching images list
