@@ -1022,6 +1022,9 @@ export function generateAdminUI(activeView = 'images') {
               \`<span class="tag" data-tag-id="\${tag.id}" onclick="toggleTag(\${tag.id}, '\${category}')">\${tag.display_name || tag.name}</span>\`
             ).join('');
           });
+          
+          // Restore active state after re-rendering
+          updateActiveTagsUI();
         }
 
         function toggleTag(tagId, category) {
