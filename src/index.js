@@ -48,7 +48,7 @@ export default {
 
     // Root path
     if (url.pathname === '/') {
-      return serveMainPage();
+      return serveMainPage(env);
     }
 
     // Serve images from R2
@@ -617,9 +617,32 @@ async function getPublicArtist(env, artistId, corsHeaders) {
 // HTML PAGE WITH SSR
 // ============================================
 
-async function serveMainPage() {
-  // Fast HTML delivery - no DB queries here!
-  // Client will fetch image data asynchronously for better perceived performance
+async function serveMainPage(env) {
+  // SSR: Fetch initial image data during HTML generation for better LCP
+  // This eliminates the client-side API call delay
+  let initialImageData = null;
+  let preloadLink = '';
+  
+  try {
+    // getRandomImage returns a Response object, so we need to extract the JSON
+    const response = await getRandomImage(env, {});
+    const responseText = await response.text();
+    initialImageData = JSON.parse(responseText);
+    
+    // Generate preload hint for the LCP image
+    if (initialImageData?.urls?.optimized) {
+      preloadLink = `<link rel="preload" as="image" href="${initialImageData.urls.optimized}" fetchpriority="high">`;
+    } else if (initialImageData?.filename) {
+      const imagePath = initialImageData.filename.startsWith('images/')
+        ? `/${initialImageData.filename}`
+        : `/images/${initialImageData.filename}`;
+      preloadLink = `<link rel="preload" as="image" href="${imagePath}" fetchpriority="high">`;
+    }
+  } catch (error) {
+    console.error('SSR image fetch failed, will fallback to client-side:', error);
+    // Graceful degradation - page will work, just slower LCP
+  }
+  
   return new Response(`
     <!DOCTYPE html>
     <html lang="en">
@@ -629,6 +652,7 @@ async function serveMainPage() {
       <title>*cute* and *pop*</title>
       <link rel="icon" type="image/x-icon" href="favicon.ico">
       <link rel="preconnect" href="https://cutetopop.com">
+      ${preloadLink}
       <style>
         * {
           box-sizing: border-box;
@@ -1183,9 +1207,17 @@ async function serveMainPage() {
     </head>
     <body>
       <div class="main-content">
-        <div class="image-container" role="img" aria-label="Random cute image">
+        <div class="image-container" role="img" aria-label="Random cute image" ${
+          initialImageData?.width && initialImageData?.height
+            ? `style="aspect-ratio: ${initialImageData.width} / ${initialImageData.height};"`
+            : ''
+        }>
           <div class="loading" aria-live="polite">Loading...</div>
-          <img id="randomImage" alt="" loading="eager" fetchpriority="high" />
+          <img id="randomImage" alt="${initialImageData?.alt_text || ''}" loading="eager" fetchpriority="high" ${
+            initialImageData?.width && initialImageData?.height
+              ? `width="${initialImageData.width}" height="${initialImageData.height}"`
+              : ''
+          } />
 
           <div class="tag-overlay" id="tagOverlay" aria-label="Image tags">
             <div class="tag-preview" id="tagPreview" role="navigation" aria-label="Quick tags"></div>
@@ -1235,8 +1267,8 @@ async function serveMainPage() {
       </aside>
 
       <script>
-        // No SSR - client fetches image data for faster HTML delivery
-        const INITIAL_IMAGE_DATA = null;
+        // SSR data - image info embedded at render time for instant display (better LCP)
+        const INITIAL_IMAGE_DATA = ${initialImageData ? JSON.stringify(initialImageData).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') : 'null'};
         
         // HTML escape utility for security
         function escapeHtml(text) {
@@ -1423,7 +1455,7 @@ async function serveMainPage() {
               // Set container aspect ratio immediately to prevent CLS
               // This locks in the exact space needed before image loads
               const aspectRatio = data.width / data.height;
-              imageContainer.style.aspectRatio = `${aspectRatio}`;
+              imageContainer.style.aspectRatio = \`\${aspectRatio}\`;
               
               // The CSS max-height: 85vh (or responsive values) will automatically
               // constrain the container if the aspect ratio would make it too tall.
