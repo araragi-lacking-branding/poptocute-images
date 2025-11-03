@@ -456,14 +456,28 @@ async function updateImageMetadata(request, env, imageId, corsHeaders) {
 
     // Handle tags
     if (Array.isArray(tags)) {
-      // Remove all existing tags
-      await env.DB.prepare(`
-        DELETE FROM image_tags WHERE image_id = ?
-      `).bind(imageId).run();
-
-      // Add new tags
-      if (tags.length > 0) {
-        const values = tags.map(tagId => `(${imageId}, ${tagId})`).join(',');
+      // Get current tags to compare
+      const currentTags = await env.DB.prepare(`
+        SELECT tag_id FROM image_tags WHERE image_id = ?
+      `).bind(imageId).all();
+      
+      const currentTagIds = new Set(currentTags.results.map(t => t.tag_id));
+      const newTagIds = new Set(tags);
+      
+      // Remove tags that are no longer selected
+      const tagsToRemove = [...currentTagIds].filter(id => !newTagIds.has(id));
+      if (tagsToRemove.length > 0) {
+        const placeholders = tagsToRemove.map(() => '?').join(',');
+        await env.DB.prepare(`
+          DELETE FROM image_tags 
+          WHERE image_id = ? AND tag_id IN (${placeholders})
+        `).bind(imageId, ...tagsToRemove).run();
+      }
+      
+      // Add new tags that weren't previously set
+      const tagsToAdd = [...newTagIds].filter(id => !currentTagIds.has(id));
+      if (tagsToAdd.length > 0) {
+        const values = tagsToAdd.map(tagId => `(${imageId}, ${tagId})`).join(',');
         await env.DB.prepare(`
           INSERT INTO image_tags (image_id, tag_id)
           VALUES ${values}
