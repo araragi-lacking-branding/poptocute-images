@@ -384,17 +384,11 @@ async function createTag(request, env, corsHeaders) {
 
 // Get detailed image information
 async function getImageDetails(env, imageId, corsHeaders) {
-  // Get image data
+  // Get image data with new metadata fields
   const image = await env.DB.prepare(`
     SELECT
-      i.*,
-      c.name as credit_name,
-      c.url as credit_url,
-      c.social_handle as credit_social,
-      c.platform as credit_platform,
-      c.license as credit_license
+      i.*
     FROM images i
-    LEFT JOIN credits c ON i.credit_id = c.id
     WHERE i.id = ?
   `).bind(imageId).first();
 
@@ -427,43 +421,30 @@ async function getImageDetails(env, imageId, corsHeaders) {
   });
 }
 
-// Update image metadata (tags and credit)
+// Update image metadata (tags and image info)
 async function updateImageMetadata(request, env, imageId, corsHeaders) {
-  const { tags, credit } = await request.json();
+  const { tags, metadata } = await request.json();
 
   try {
-    // Start by handling credit
-    let creditId = null;
-    if (credit && credit.name) {
-      // Check if credit already exists
-      const existingCredit = await env.DB.prepare(`
-        SELECT id FROM credits
-        WHERE name = ? AND url = ?
-      `).bind(credit.name, credit.url || null).first();
-
-      if (existingCredit) {
-        creditId = existingCredit.id;
-      } else {
-        // Create new credit
-        const result = await env.DB.prepare(`
-          INSERT INTO credits (name, url, social_handle, platform, license, verified)
-          VALUES (?, ?, ?, ?, ?, 0)
-        `).bind(
-          credit.name,
-          credit.url || null,
-          credit.social_handle || null,
-          credit.platform || null,
-          credit.license || 'Unknown'
-        ).run();
-        creditId = result.meta.last_row_id;
-      }
-
-      // Update image with credit
+    // Handle image metadata fields
+    if (metadata) {
       await env.DB.prepare(`
         UPDATE images
-        SET credit_id = ?, updated_at = datetime('now')
+        SET title = ?,
+            source = ?,
+            license = ?,
+            permissions = ?,
+            notes = ?,
+            updated_at = datetime('now')
         WHERE id = ?
-      `).bind(creditId, imageId).run();
+      `).bind(
+        metadata.title || null,
+        metadata.source || null,
+        metadata.license || null,
+        metadata.permissions || null,
+        metadata.notes || null,
+        imageId
+      ).run();
     }
 
     // Handle tags
