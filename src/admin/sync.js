@@ -8,7 +8,50 @@
 export async function syncKVCache(env) {
   console.log('Starting D1 → KV sync...');
 
-  // Query D1 for all eligible active images (excluding hidden artists/tags)
+  // Step 1: Sync credits for artists with creator tags but no credit records
+  console.log('Syncing credits for artists with creator tags...');
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO credits (name, artist_id, verified, notes)
+    SELECT 
+      COALESCE(a.display_name, a.name) as name,
+      a.id as artist_id,
+      a.verified,
+      'Auto-created from artist profile for creator tag linking'
+    FROM artists a
+    WHERE a.status = 'active'
+      AND NOT EXISTS (
+        SELECT 1 FROM credits c WHERE c.artist_id = a.id
+      )
+  `).run();
+
+  // Step 2: Link images to artist credits based on their creator tags
+  console.log('Linking images to artist credits via creator tags...');
+  await env.DB.prepare(`
+    UPDATE images
+    SET credit_id = (
+      SELECT c.id
+      FROM image_tags it
+      JOIN tags t ON it.tag_id = t.id
+      JOIN tag_categories tc ON t.category_id = tc.id
+      JOIN artist_tags at ON t.id = at.tag_id
+      JOIN credits c ON at.artist_id = c.artist_id
+      WHERE it.image_id = images.id
+        AND tc.name = 'creator'
+        AND c.artist_id IS NOT NULL
+      LIMIT 1
+    )
+    WHERE EXISTS (
+      SELECT 1
+      FROM image_tags it
+      JOIN tags t ON it.tag_id = t.id
+      JOIN tag_categories tc ON t.category_id = tc.id
+      WHERE it.image_id = images.id
+        AND tc.name = 'creator'
+    )
+    AND images.status = 'active'
+  `).run();
+
+  // Step 3: Query D1 for all eligible active images (excluding hidden artists/tags)
   const results = await env.DB.prepare(`
     SELECT i.filename
     FROM images i
