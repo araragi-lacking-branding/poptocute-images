@@ -3,6 +3,7 @@
 // WebP conversion happens on serve via Cloudflare Image Resizing API
 
 import { syncKVCache } from './sync.js';
+import { extractImageMetadata, sanitizeMetadata } from '../lib/metadata-extractor.js';
 
 export async function handleUpload(request, env) {
   try {
@@ -66,8 +67,11 @@ export async function handleUpload(request, env) {
       });
     }
 
-    // Get image dimensions from file headers
-    const dimensions = getImageDimensionsSync(buffer);
+    // Extract comprehensive metadata (EXIF, dimensions, color space, etc.)
+    const rawMetadata = extractImageMetadata(buffer, file.type, file.name);
+    const metadata = sanitizeMetadata(rawMetadata);
+    
+    console.log(`Metadata extracted: ${metadata.width}x${metadata.height}, ${metadata.format}, ${metadata.color_space}`);
 
     // Generate filename with hash and original extension
     const ext = file.name.split('.').pop().toLowerCase();
@@ -83,7 +87,7 @@ export async function handleUpload(request, env) {
 
     console.log(`Uploaded to R2: ${filename}`);
 
-    // Save to database
+    // Save to database with comprehensive metadata
     const result = await env.DB.prepare(`
       INSERT INTO images (
         filename, 
@@ -93,19 +97,43 @@ export async function handleUpload(request, env) {
         height,
         mime_type, 
         file_hash,
+        format,
+        color_space,
+        bit_depth,
+        has_alpha,
+        is_animated,
+        frame_count,
+        orientation,
+        aspect_ratio,
+        date_taken,
+        dpi_x,
+        dpi_y,
+        exif_data,
         status, 
         credit_id,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1, datetime('now'), datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, datetime('now'), datetime('now'))
     `).bind(
       filename,
       file.name,
       fileSize,
-      dimensions.width,
-      dimensions.height,
+      metadata.width,
+      metadata.height,
       file.type,
-      hashHex
+      hashHex,
+      metadata.format,
+      metadata.color_space,
+      metadata.bit_depth,
+      metadata.has_alpha,
+      metadata.is_animated,
+      metadata.frame_count,
+      metadata.orientation,
+      metadata.aspect_ratio,
+      metadata.date_taken,
+      metadata.dpi_x,
+      metadata.dpi_y,
+      metadata.exif_data
     ).run();
 
     console.log(`Saved to database: ID ${result.meta.last_row_id}`);
@@ -124,8 +152,17 @@ export async function handleUpload(request, env) {
       id: result.meta.last_row_id,
       filename: filename,
       size: fileSize,
-      dimensions: dimensions,
-      message: 'Image uploaded successfully. WebP conversion on serve via Cloudflare.'
+      metadata: {
+        dimensions: `${metadata.width}x${metadata.height}`,
+        format: metadata.format,
+        colorSpace: metadata.color_space,
+        bitDepth: metadata.bit_depth,
+        hasAlpha: metadata.has_alpha === 1,
+        isAnimated: metadata.is_animated === 1,
+        orientation: metadata.orientation,
+        aspectRatio: metadata.aspect_ratio
+      },
+      message: 'Image uploaded with comprehensive metadata. WebP conversion on serve via Cloudflare.'
     }), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -139,58 +176,5 @@ export async function handleUpload(request, env) {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
-  }
-}
-
-/**
- * Get image dimensions by parsing file headers
- * Simple synchronous function - no external dependencies
- */
-function getImageDimensionsSync(buffer) {
-  try {
-    const view = new DataView(buffer);
-    
-    // PNG (starts with 0x89504E47)
-    if (view.getUint32(0, false) === 0x89504E47) {
-      return {
-        width: view.getUint32(16, false),
-        height: view.getUint32(20, false)
-      };
-    }
-    
-    // JPEG (starts with 0xFFD8)
-    if (view.getUint16(0, false) === 0xFFD8) {
-      let offset = 2;
-      while (offset < view.byteLength - 8) {
-        if (view.getUint8(offset) !== 0xFF) break;
-        const marker = view.getUint8(offset + 1);
-        const size = view.getUint16(offset + 2, false);
-        
-        // SOF markers
-        if (marker >= 0xC0 && marker <= 0xCF && 
-            marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
-          return {
-            height: view.getUint16(offset + 5, false),
-            width: view.getUint16(offset + 7, false)
-          };
-        }
-        offset += 2 + size;
-      }
-    }
-    
-    // GIF (starts with GIF87a or GIF89a)
-    const gifHeader = new Uint8Array(buffer, 0, 6);
-    const gifString = String.fromCharCode(...gifHeader);
-    if (gifString.startsWith('GIF')) {
-      return {
-        width: view.getUint16(6, true),
-        height: view.getUint16(8, true)
-      };
-    }
-    
-    return { width: 0, height: 0 };
-  } catch (e) {
-    console.error('Dimension detection error:', e);
-    return { width: 0, height: 0 };
   }
 }

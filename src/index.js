@@ -1,5 +1,6 @@
 import { handleAdminRequest } from './admin/routes.js';
 import { syncKVCache } from './admin/sync.js';
+import { validateMetadata, backfillMetadata } from './admin/metadata-sync.js';
 
 // src/index.js - Worker with Image Transformations via fetch
 export default {
@@ -100,17 +101,43 @@ export default {
 
   /**
    * Scheduled event handler for Cron Triggers
-   * Runs daily sync at 3 AM UTC
+   * Runs daily at 3 AM UTC
+   * - Syncs KV cache with D1 data
+   * - Validates metadata completeness
+   * - Auto-backfills missing metadata (small batches)
    */
   async scheduled(event, env, ctx) {
-    console.log('Scheduled sync triggered at', new Date().toISOString());
+    console.log('Scheduled maintenance triggered at', new Date().toISOString());
     
     try {
-      // Sync KV cache with D1 data
-      const result = await syncKVCache(env);
-      console.log(`Scheduled sync completed: ${result.count} images synced at ${result.timestamp}`);
+      // 1. Sync KV cache with D1 data
+      const syncResult = await syncKVCache(env);
+      console.log(`✅ KV sync completed: ${syncResult.count} images synced at ${syncResult.timestamp}`);
+      
+      // 2. Validate metadata completeness
+      const validation = await validateMetadata(env);
+      console.log(`📊 Metadata validation: ${validation.needsBackfill} images need backfill`);
+      console.log(`   - Dimensions: ${validation.coverage.dimensions}`);
+      console.log(`   - Format: ${validation.coverage.format}`);
+      console.log(`   - Color Space: ${validation.coverage.colorSpace}`);
+      
+      // 3. Auto-backfill small batches (max 20 per run to avoid long execution)
+      if (validation.needsBackfill > 0) {
+        console.log('🔄 Starting auto-backfill for missing metadata...');
+        const backfillResult = await backfillMetadata(env, { 
+          dryRun: false, 
+          limit: 20,
+          forceAll: false 
+        });
+        console.log(`✅ Backfill completed: ${backfillResult.updated} images updated`);
+        
+        if (backfillResult.failed > 0) {
+          console.warn(`⚠️  ${backfillResult.failed} images failed to process`);
+        }
+      }
+      
     } catch (error) {
-      console.error('Scheduled sync failed:', error);
+      console.error('❌ Scheduled maintenance failed:', error);
       // Don't throw - we don't want to mark the scheduled event as failed
     }
   }
