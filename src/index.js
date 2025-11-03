@@ -121,12 +121,12 @@ export default {
       console.log(`   - Format: ${validation.coverage.format}`);
       console.log(`   - Color Space: ${validation.coverage.colorSpace}`);
       
-      // 3. Auto-backfill small batches (max 20 per run to avoid long execution)
+      // 3. Auto-backfill all images missing metadata
       if (validation.needsBackfill > 0) {
-        console.log('🔄 Starting auto-backfill for missing metadata...');
+        console.log(`🔄 Starting metadata backfill for ${validation.needsBackfill} images...`);
         const backfillResult = await backfillMetadata(env, { 
           dryRun: false, 
-          limit: 20,
+          limit: undefined, // No limit - process all missing metadata
           forceAll: false 
         });
         console.log(`✅ Backfill completed: ${backfillResult.updated} images updated`);
