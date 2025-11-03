@@ -326,13 +326,41 @@ export function generateAdminUI(activeView = 'images') {
           margin-bottom: 15px;
         }
 
-        .credit-form input, .credit-form select {
+        .credit-form input, .credit-form select, .credit-form textarea {
           width: 100%;
           padding: 10px;
           margin-bottom: 10px;
           border: 1px solid #ddd;
           border-radius: 4px;
           font-size: 14px;
+          font-family: inherit;
+        }
+
+        .credit-form textarea {
+          resize: vertical;
+          min-height: 60px;
+        }
+
+        .credit-form .readonly-fields {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 15px;
+          padding-top: 15px;
+          border-top: 1px solid #eee;
+        }
+
+        .credit-form .readonly-fields input {
+          background-color: #f5f5f5;
+          color: #666;
+          cursor: not-allowed;
+          font-family: 'Courier New', monospace;
+          font-size: 13px;
+        }
+
+        .credit-form .readonly-fields input::placeholder {
+          color: #999;
+          font-weight: 600;
         }
 
         .save-section {
@@ -872,29 +900,26 @@ export function generateAdminUI(activeView = 'images') {
           </div>
 
           <div class="credit-section">
-            <h3>Credit Attribution</h3>
+            <h3>Image Information</h3>
             <div class="credit-form">
-              <input type="text" id="credit-name" placeholder="Artist/Creator Name" />
-              <input type="url" id="credit-url" placeholder="Profile URL (optional)" />
-              <input type="text" id="credit-social" placeholder="Social Handle (optional)" />
-              <select id="credit-platform">
-                <option value="">Select Platform</option>
-                <option value="twitter">Twitter/X</option>
-                <option value="pixiv">Pixiv</option>
-                <option value="instagram">Instagram</option>
-                <option value="artstation">ArtStation</option>
-                <option value="deviantart">DeviantArt</option>
-                <option value="other">Other</option>
-              </select>
-              <select id="credit-license">
-                <option value="Unknown">License Unknown</option>
+              <input type="text" id="image-title" placeholder="Image Title (optional)" />
+              <input type="text" id="image-source" placeholder="Image Source (optional)" />
+              <select id="image-license">
+                <option value="">License (optional)</option>
                 <option value="All Rights Reserved">All Rights Reserved</option>
                 <option value="CC BY">CC BY</option>
                 <option value="CC BY-SA">CC BY-SA</option>
                 <option value="CC BY-NC">CC BY-NC</option>
                 <option value="CC BY-NC-SA">CC BY-NC-SA</option>
                 <option value="Public Domain">Public Domain</option>
+                <option value="Fair Use">Fair Use</option>
               </select>
+              <textarea id="image-permissions" placeholder="Permissions (e.g., 'Artist granted permission via email 2025-11-02')" rows="2"></textarea>
+              <textarea id="image-notes" placeholder="Notes (optional)" rows="3"></textarea>
+              <div class="readonly-fields">
+                <input type="text" id="image-id" placeholder="Image ID" readonly />
+                <input type="text" id="image-hash" placeholder="File Hash" readonly />
+              </div>
             </div>
           </div>
 
@@ -1202,11 +1227,14 @@ export function generateAdminUI(activeView = 'images') {
             (data.tags || []).forEach(tag => activeTags.add(tag.id));
             updateActiveTagsUI();
             
-            document.getElementById('credit-name').value = data.credit_name || '';
-            document.getElementById('credit-url').value = data.credit_url || '';
-            document.getElementById('credit-social').value = data.credit_social || '';
-            document.getElementById('credit-platform').value = data.credit_platform || '';
-            document.getElementById('credit-license').value = data.credit_license || 'Unknown';
+            // Populate image information fields
+            document.getElementById('image-title').value = data.title || '';
+            document.getElementById('image-source').value = data.source || '';
+            document.getElementById('image-license').value = data.license || '';
+            document.getElementById('image-permissions').value = data.permissions || '';
+            document.getElementById('image-notes').value = data.notes || '';
+            document.getElementById('image-id').value = data.id || '';
+            document.getElementById('image-hash').value = data.file_hash || '';
             
           } catch (error) {
             console.error('Failed to load image:', error);
@@ -1244,12 +1272,12 @@ export function generateAdminUI(activeView = 'images') {
           
           const data = {
             tags: Array.from(activeTags),
-            credit: {
-              name: document.getElementById('credit-name').value,
-              url: document.getElementById('credit-url').value,
-              social_handle: document.getElementById('credit-social').value,
-              platform: document.getElementById('credit-platform').value,
-              license: document.getElementById('credit-license').value
+            metadata: {
+              title: document.getElementById('image-title').value,
+              source: document.getElementById('image-source').value,
+              license: document.getElementById('image-license').value,
+              permissions: document.getElementById('image-permissions').value,
+              notes: document.getElementById('image-notes').value
             }
           };
           
