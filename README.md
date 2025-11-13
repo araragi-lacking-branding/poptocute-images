@@ -199,33 +199,51 @@ Automatic via Cloudflare Pages:
 
 ```
 poptocute-images/
+├── docs/
+│   ├── api.md             # API documentation and Cloudflare Shield
+│   ├── maintenance.md     # Performance reports and maintenance
+│   └── ethics.md          # Artist profiles and attribution
 ├── public/
-│   ├── images/          # 187 image files (backup, served from R2)
-│   └── favicon.ico
+│   └── favicon.ico        # Site favicon
 ├── src/
-│   ├── index.js         # Main Worker (routing, API, image serving)
+│   ├── index.js           # Main Worker (routing, API, image serving)
+│   ├── static/
+│   │   ├── styles.css     # Extracted CSS styles
+│   │   └── app.js         # Extracted client-side JavaScript
 │   └── admin/
-│       ├── routes.js    # Admin API endpoints
-│       ├── ui.js        # Admin dashboard UI
-│       ├── upload.js    # R2 upload handling
-│       └── sync.js      # KV sync functionality
+│       ├── routes.js      # Admin API endpoints
+│       ├── ui.js          # Admin dashboard UI
+│       ├── upload.js      # R2 upload handling
+│       ├── sync.js        # KV sync functionality
+│       ├── artists.js     # Artist management functions
+│       ├── metadata-sync.js # Metadata backfill utilities
+│       └── metadata-extractor.js # Image metadata extraction
 ├── scripts/
-│   ├── sync-kv.js       # Active: D1 to KV sync utility
+│   ├── sync-kv.js         # Active: D1 to KV sync utility
+│   ├── backfill-image-metadata.js # Metadata backfill script
+│   ├── monitor-requests.ps1 # Request monitoring (PowerShell)
+│   ├── test-artist-api.js # Artist API testing
+│   ├── test-duplicate-prevention.js # Duplicate prevention tests
+│   ├── test-lcp.ps1       # LCP performance testing
+│   ├── test-normalization-v2.js # Normalization tests
 │   └── archive/
-│       ├── migration/   # Historical migration scripts
-│       │   ├── migrate-images.js
-│       │   ├── migrate-to-r2.js
-│       │   └── upload-to-r2-remote.js
-│       └── verification/ # Post-migration audit scripts
-│           ├── audit-r2.js
-│           ├── check-db-vs-r2.js
-│           ├── test-upload.js
-│           ├── verify-only.js
-│           └── verify-r2.js
-├── schema.sql           # D1 database schema
-├── wrangler.toml        # Worker config (D1, R2, KV bindings)
-├── package.json
-└── README.md
+│       └── migration/     # Historical migration scripts
+│           ├── add-artist-profiles.sql
+│           ├── add-case-insensitive-artist-name.sql
+│           ├── add-image-metadata-fields.sql
+│           ├── add-permissions-field.sql
+│           ├── add-status-fields.sql
+│           ├── auto-assign-creator-tags.js
+│           ├── link-credits-to-artists.sql
+│           ├── migrate-credits-sync.js
+│           ├── sync-creators-to-artists.sql
+│           ├── sync-credits-from-creator-tags.js
+│           └── test-credits-sync.js
+├── schema.sql             # D1 database schema
+├── wrangler.toml          # Worker config (D1, R2, KV bindings)
+├── package.json           # Dependencies and scripts
+├── eslint.config.js       # ESLint configuration
+└── README.md              # This file
 ```
 
 ## Adding New Images
