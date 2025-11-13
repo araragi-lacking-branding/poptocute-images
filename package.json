@@ -3,10 +3,12 @@
   "version": "1.1.0",
   "scripts": {
     "build": "echo 'No build needed'",
+    "lint": "eslint src/**/*.js --ignore-pattern src/static/**",
     "deploy": "wrangler deploy && npm run post-deploy",
     "post-deploy": "curl -X POST https://cutetopop.com/api/admin/sync || echo 'Sync triggered (may require authentication)'"
   },
   "devDependencies": {
+    "eslint": "^9.39.1",
     "wrangler": "^4.45.3"
   }
 }
