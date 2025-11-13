@@ -284,7 +284,11 @@ async function getImages(env, params, corsHeaders) {
       limit,
       offset
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
+      }
     });
   } catch (error) {
     console.error('Error fetching images:', error);
@@ -328,7 +332,11 @@ async function getStats(env, corsHeaders) {
       credited_artists: creditCount.count,
       total_artists: artistCount.count
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=600' // Cache for 10 minutes
+      }
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
