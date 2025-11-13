@@ -1,0 +1,419 @@
+        .image-container:hover .tag-overlay,
+        .image-container:focus-within .tag-overlay {
+          opacity: 1;
+          transform: translateY(0);
+          pointer-events: auto;
+        }
+
+        .tag-preview {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-bottom: 0.5rem;
+          align-items: center;
+        }
+
+        .tag {
+          display: inline-block;
+          padding: 0.25rem 0.75rem;
+          background: rgba(255, 255, 255, 0.9);
+          color: #333;
+          border-radius: 20px;
+          font-size: 0.85rem;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          white-space: nowrap;
+          backdrop-filter: blur(4px);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .tag[data-category="content"] { border-left: 3px solid #ff6b9d; }
+        .tag[data-category="character"] { border-left: 3px solid #4ecdc4; }
+        .tag[data-category="creator"] { border-left: 3px solid #95e1d3; }
+        .tag[data-category="source"] { border-left: 3px solid #ffa07a; }
+
+        .expand-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          padding: 0.25rem 0.75rem;
+          background: rgba(255, 255, 255, 0.95);
+          color: #333;
+          border: none;
+          border-radius: 20px;
+          font-size: 0.85rem;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          cursor: pointer;
+          backdrop-filter: blur(4px);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          transition: background 0.2s ease, transform 0.1s ease;
+        }
+
+        .expand-btn:hover {
+          background: rgba(255, 255, 255, 1);
+          transform: scale(1.05);
+        }
+
+        .expand-btn:focus {
+          outline: 2px solid #4ecdc4;
+          outline-offset: 2px;
+        }
+
+        .expand-btn::after {
+          content: '▼';
+          font-size: 0.7rem;
+          transition: transform 0.3s ease;
+        }
+
+        .expand-btn.expanded::after {
+          transform: rotate(180deg);
+        }
+
+        /* Expanded Metadata View */
+        .metadata-panel {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: #fff;
+          border-top: 1px solid #ddd;
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+          max-height: 60vh;
+          overflow-y: auto;
+          padding: 1.5rem;
+          transform: translateY(100%);
+          transition: transform 0.3s ease-in-out;
+          z-index: 1000;
+        }
+
+        .metadata-panel.open {
+          transform: translateY(0);
+        }
+
+        .metadata-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+
+        .metadata-header h2 {
+          margin: 0;
+          font-size: 1.25rem;
+          font-weight: 500;
+          color: #333;
+        }
+
+        .close-btn {
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: #666;
+          padding: 0.25rem;
+          line-height: 1;
+          transition: color 0.2s ease;
+        }
+
+        .close-btn:hover {
+          color: #000;
+        }
+
+        .close-btn:focus {
+          outline: 2px solid #4ecdc4;
+          outline-offset: 2px;
+        }
+
+        .metadata-section {
+          margin-bottom: 1.5rem;
+        }
+
+        .metadata-section h3 {
+          font-size: 1rem;
+          font-weight: 500;
+          color: #666;
+          margin: 0 0 0.75rem 0;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .tag-category {
+          margin-bottom: 1rem;
+        }
+
+        .tag-category-name {
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #555;
+          margin-bottom: 0.5rem;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .tag-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+
+        .metadata-info {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font-size: 0.9rem;
+        }
+
+        .metadata-item {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .metadata-label {
+          font-weight: 600;
+          color: #666;
+        }
+
+        .metadata-value {
+          color: #333;
+        }
+
+        .metadata-value a {
+          color: #4ecdc4;
+          text-decoration: none;
+        }
+
+        .metadata-value a:hover {
+          text-decoration: underline;
+        }
+
+        /* Skeleton loading animation */
+        .skeleton-text {
+          display: inline-block;
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          background-size: 200% 100%;
+          animation: skeleton-loading 1.5s ease-in-out infinite;
+          border-radius: 4px;
+          color: transparent;
+          user-select: none;
+        }
+
+        @keyframes skeleton-loading {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+
+        /* Artist Credit Display */
+        .artist-credit {
+          text-align: center;
+          margin: 0 auto 0.5rem;
+          max-width: 600px;
+          min-height: 80px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .artist-credit-label {
+          font-size: 0.75rem;
+          color: #888;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-bottom: 0.25rem;
+        }
+
+        .artist-credit-name {
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #333;
+          margin-bottom: 0.25rem;
+        }
+
+        .artist-credit-name a {
+          color: #333;
+          text-decoration: none;
+          transition: color 0.2s ease;
+        }
+
+        .artist-credit-name a:hover {
+          color: #4ecdc4;
+        }
+
+        .artist-credit-social {
+          font-size: 0.9rem;
+          color: #666;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.35rem;
+        }
+
+        .artist-credit-social a {
+          color: #4ecdc4;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          transition: color 0.2s ease;
+        }
+
+        .artist-credit-social a:hover {
+          color: #3ab5ac;
+          text-decoration: underline;
+        }
+
+        .artist-credit-social::before {
+          content: '→';
+          font-size: 0.9rem;
+          color: #999;
+        }
+
+        .artist-credit-help {
+          font-size: 0.85rem;
+          color: #888;
+          font-style: italic;
+        }
+
+        .artist-credit-help a {
+          color: #4ecdc4;
+          text-decoration: none;
+          font-style: normal;
+        }
+
+        .artist-credit-help a:hover {
+          text-decoration: underline;
+        }
+
+        .artist-unknown {
+          color: #888;
+          font-style: italic;
+        }
+
+        .disclaimer {
+          font-size: 0.85rem;
+          color: #888;
+          text-align: center;
+          max-width: 600px;
+          line-height: 1.4;
+          margin: 0.75rem auto 0;
+          opacity: 0.8;
+        }
+
+        .footer-link {
+          font-size: 0.75rem;
+          color: #999;
+          text-align: center;
+          margin: 0.5rem auto 0;
+        }
+
+        .footer-link a {
+          color: #999;
+          text-decoration: none;
+          transition: color 0.2s ease;
+        }
+
+        .footer-link a:hover {
+          color: #4ecdc4;
+        }
+
+        .loading {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          color: #666;
+          font-size: 0.9rem;
+          display: none;
+        }
+
+        /* Accessibility - High Contrast Mode */
+        @media (prefers-contrast: high) {
+          .tag, .expand-btn {
+            background: #fff;
+            border: 2px solid #000;
+          }
+        }
+
+        /* Accessibility - Reduced Motion */
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+          }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+          .metadata-panel {
+            max-height: 85vh;
+            padding: 1rem;
+            border-radius: 16px 16px 0 0;
+          }
+
+          .metadata-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 0.5rem 0;
+            margin-bottom: 0.75rem;
+            z-index: 2;
+          }
+
+          .tag-preview {
+            gap: 0.4rem;
+          }
+
+          .tag {
+            font-size: 0.8rem;
+            padding: 0.35rem 0.75rem;
+          }
+
+          .expand-btn {
+            font-size: 0.85rem;
+            padding: 0.4rem 0.8rem;
+            margin-top: 0.25rem;
+          }
+
+          /* Better touch targets */
+          .close-btn {
+            padding: 0.5rem;
+            margin: -0.5rem;
+            font-size: 1.75rem;
+          }
+        }
+
+        /* Tablet-specific adjustments */
+        @media (min-width: 601px) and (max-width: 1024px) {
+          .metadata-panel {
+            max-height: 75vh;
+            padding: 1.25rem;
+            border-radius: 20px 20px 0 0;
+          }
+
+          .tag-preview {
+            gap: 0.45rem;
+          }
+
+          .tag {
+            font-size: 0.85rem;
+            padding: 0.3rem 0.8rem;
+          }
+        }
+
+        /* Overlay backdrop when panel is open */
+        .backdrop {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.3);
+          z-index: 999;
+        }
+
+        .backdrop.visible {
+          display: block;
+        }
