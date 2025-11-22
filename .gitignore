@@ -26,3 +26,8 @@ public/images/
 # OS files
 Thumbs.db
 desktop.ini
+
+# Local test artifacts and temporary files
+local-samples/
+tmp/
+scripts/*.ps1
