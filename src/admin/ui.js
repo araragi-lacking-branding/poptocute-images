@@ -777,10 +777,7 @@ export function generateAdminUI(activeView = 'images') {
         </div>
         <div class="stats">
           <span id="stat-images">Loading...</span>
-          <span id="stat-tags">Loading...</span>
-          <span id="stat-credits">Loading...</span>
-          <span id="stat-artists">Loading...</span>
-          <button class="btn btn-primary" onclick="syncDatabase()" id="sync-button" style="margin-left: 20px;">Sync DB</button>
+          <button class="btn btn-primary" onclick="syncDatabase()" id="sync-button" style="margin-left: 20px;">Sync KV & Metadata</button>
           <span id="sync-status" style="margin-left: 10px; font-size: 12px;"></span>
         </div>
       </div>
@@ -1490,7 +1487,7 @@ export function generateAdminUI(activeView = 'images') {
           const status = document.getElementById('sync-status');
           
           button.disabled = true;
-          button.textContent = 'Syncing...';
+          button.textContent = 'Syncing KV & Metadata...';
           status.textContent = 'Working...';
           
           try {
@@ -1502,7 +1499,14 @@ export function generateAdminUI(activeView = 'images') {
             const result = await response.json();
             
             if (response.ok) {
-              status.textContent = 'Synced ' + result.count + ' images';
+              const kvCount = result.count;
+              const metaBackfilled = result.metadata.backfilled;
+              const metaFailed = result.metadata.failed;
+              let statusText = 'KV: ' + kvCount + ' images | Metadata: ' + metaBackfilled + ' backfilled';
+              if (metaFailed > 0) {
+                statusText += ', ' + metaFailed + ' failed';
+              }
+              status.textContent = statusText;
               status.style.color = '#388e3c';
               await loadStats();
             } else {
@@ -1515,7 +1519,7 @@ export function generateAdminUI(activeView = 'images') {
             status.style.color = '#c62828';
           } finally {
             button.disabled = false;
-            button.textContent = 'Sync DB';
+            button.textContent = 'Sync KV & Metadata';
           }
         }
 
