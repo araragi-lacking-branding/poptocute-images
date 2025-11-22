@@ -991,12 +991,20 @@ export function generateAdminUI(activeView = 'images') {
           try {
             const response = await fetch('/api/stats');
             const stats = await response.json();
-            document.getElementById('stat-images').textContent = \`Images: \${stats.total_images}\`;
+            console.log('Stats response:', stats);
+            const active = stats.images?.active || 0;
+            const hidden = stats.images?.hidden || 0;
+            const total = stats.images?.total || 0;
+            document.getElementById('stat-images').textContent = \`Images: \${active} active, \${hidden} hidden (\${total} total)\`;
             document.getElementById('stat-tags').textContent = \`Tags: \${stats.total_tags}\`;
             document.getElementById('stat-credits').textContent = \`Credits: \${stats.credited_artists}\`;
             document.getElementById('stat-artists').textContent = \`Artists: \${stats.total_artists}\`;
           } catch (error) {
             console.error('Failed to load stats:', error);
+            document.getElementById('stat-images').textContent = 'Images: Error loading';
+            document.getElementById('stat-tags').textContent = 'Tags: Error loading';
+            document.getElementById('stat-credits').textContent = 'Credits: Error loading';
+            document.getElementById('stat-artists').textContent = 'Artists: Error loading';
           }
         }
 

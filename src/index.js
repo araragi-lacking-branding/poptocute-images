@@ -298,8 +298,15 @@ async function getImages(env, params, corsHeaders) {
 
 async function getStats(env, corsHeaders) {
   try {
+    // Get counts by status
+    const statusCounts = await env.DB.prepare(`
+      SELECT status, COUNT(*) as count 
+      FROM images 
+      GROUP BY status
+    `).all();
+
     // Count only eligible images (active, not hidden by tags/artists)
-    const imageCount = await env.DB.prepare(`
+    const eligibleCount = await env.DB.prepare(`
       SELECT COUNT(*) as count 
       FROM images i
       LEFT JOIN credits c ON i.credit_id = c.id
@@ -326,11 +333,26 @@ async function getStats(env, corsHeaders) {
       `SELECT COUNT(*) as count FROM artists WHERE status = 'active'`
     ).first();
 
+    // Build status breakdown
+    const imageStats = {
+      total: 0,
+      active: 0,
+      hidden: 0,
+      eligible: eligibleCount.count
+    };
+
+    for (const row of statusCounts.results) {
+      imageStats[row.status] = row.count;
+      imageStats.total += row.count;
+    }
+
     return new Response(JSON.stringify({
-      total_images: imageCount.count,
+      images: imageStats,
       total_tags: tagCount.count,
       credited_artists: creditCount.count,
-      total_artists: artistCount.count
+      total_artists: artistCount.count,
+      // Keep backward compatibility
+      total_images: imageStats.eligible
     }), {
       headers: {
         ...corsHeaders,
