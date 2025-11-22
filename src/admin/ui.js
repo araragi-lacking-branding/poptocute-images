@@ -777,7 +777,10 @@ export function generateAdminUI(activeView = 'images') {
         </div>
         <div class="stats">
           <span id="stat-images">Loading...</span>
-          <button class="btn btn-primary" onclick="syncDatabase()" id="sync-button" style="margin-left: 20px;">Sync KV & Metadata</button>
+          <span id="stat-tags">Loading...</span>
+          <span id="stat-credits">Loading...</span>
+          <span id="stat-artists">Loading...</span>
+          <button class="btn btn-primary" onclick="syncDatabase()" id="sync-button" style="margin-left: 20px;">Sync DB</button>
           <span id="sync-status" style="margin-left: 10px; font-size: 12px;"></span>
         </div>
       </div>
@@ -991,19 +994,12 @@ export function generateAdminUI(activeView = 'images') {
           try {
             const response = await fetch('/api/stats');
             const stats = await response.json();
-            const active = stats.images?.active || 0;
-            const hidden = stats.images?.hidden || 0;
-            const total = stats.images?.total || 0;
             document.getElementById('stat-images').textContent = \`Images: \${stats.total_images}\`;
             document.getElementById('stat-tags').textContent = \`Tags: \${stats.total_tags}\`;
             document.getElementById('stat-credits').textContent = \`Credits: \${stats.credited_artists}\`;
             document.getElementById('stat-artists').textContent = \`Artists: \${stats.total_artists}\`;
           } catch (error) {
             console.error('Failed to load stats:', error);
-            document.getElementById('stat-images').textContent = 'Images: Error loading';
-            document.getElementById('stat-tags').textContent = 'Tags: Error loading';
-            document.getElementById('stat-credits').textContent = 'Credits: Error loading';
-            document.getElementById('stat-artists').textContent = 'Artists: Error loading';
           }
         }
 
@@ -1494,7 +1490,7 @@ export function generateAdminUI(activeView = 'images') {
           const status = document.getElementById('sync-status');
           
           button.disabled = true;
-          button.textContent = 'Syncing KV & Metadata...';
+          button.textContent = 'Syncing...';
           status.textContent = 'Working...';
           
           try {
@@ -1506,14 +1502,7 @@ export function generateAdminUI(activeView = 'images') {
             const result = await response.json();
             
             if (response.ok) {
-              const kvCount = result.count;
-              const metaBackfilled = result.metadata.backfilled;
-              const metaFailed = result.metadata.failed;
-              let statusText = 'KV: ' + kvCount + ' images | Metadata: ' + metaBackfilled + ' backfilled';
-              if (metaFailed > 0) {
-                statusText += ', ' + metaFailed + ' failed';
-              }
-              status.textContent = statusText;
+              status.textContent = 'Synced ' + result.count + ' images';
               status.style.color = '#388e3c';
               await loadStats();
             } else {
@@ -1526,7 +1515,7 @@ export function generateAdminUI(activeView = 'images') {
             status.style.color = '#c62828';
           } finally {
             button.disabled = false;
-            button.textContent = 'Sync KV & Metadata';
+            button.textContent = 'Sync DB';
           }
         }
 
