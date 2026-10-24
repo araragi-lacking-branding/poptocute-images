@@ -9,6 +9,6 @@
   },
   "devDependencies": {
     "eslint": "^9.39.1",
-    "wrangler": "^4.45.3"
+    "wrangler": "^4.152.0"
   }
 }
