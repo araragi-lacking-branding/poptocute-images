@@ -171,6 +171,10 @@ wrangler login
 
 # Run locally
 npx wrangler dev
+
+# Lint and run the offline tests (the same checks CI runs on every PR)
+npm run lint
+npm test
 ```
 
 Local dev has no Cloudflare Access in front of it, so `/admin` returns 403. To use the admin UI locally, create `.dev.vars` (gitignored) containing `ACCESS_DEV_BYPASS = "true"`. Never set this in `wrangler.toml`.
