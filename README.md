@@ -43,7 +43,7 @@ A random image display site with metadata management, tagging, and attribution s
 
 ## Architecture
 
-- **Images**: Stored in Cloudflare R2 (hash-based names) with backup in GitHub (`public/images/`)
+- **Images**: Stored in Cloudflare R2 (hash-based names), not in this repository; see [Backups](#backups)
 - **Cache**: Cloudflare KV for fast global image list access
 - **Metadata**: Cloudflare D1 database (tags, credits, status)
 - **Image Transforms**: Cloudflare Image Resizing via `/cdn-cgi/image/` for WebP conversion
@@ -203,9 +203,28 @@ Automatic via Cloudflare Workers Builds:
 2. Workers Builds deploys automatically (shows as the `Workers Builds: cutetopop-worker` check on the commit)
 3. Changes live in ~2 minutes
 
-If a commit on `main` has no Workers Builds check, the GitHub connection isn't triggering: check the Worker's **Settings → Build** in the Cloudflare dashboard. Manual fallback: `npx wrangler deploy`.
+Workers Builds only deploys commits that touch its watch paths: `src/`, `public/`, `wrangler.toml`, `schema.sql`, `package.json` and `package-lock.json`. Docs, CI, script or test changes merge without a deploy. If a commit that touches those paths gets no Workers Builds check, look at the Worker's **Settings → Build** in the Cloudflare dashboard. Manual fallback: `npx wrangler deploy`.
 
 Routes and custom domains come from `wrangler.toml`. Wrangler can't delete plain routes created in the dashboard, so remove those there.
+
+## Backups
+
+| Data | Primary recovery | Off-site copy |
+|---|---|---|
+| D1 database | D1 Time Travel: `npx wrangler d1 time-travel restore cutetopop-db --timestamp=<ISO time>` | `scripts/backup-d1.mjs` SQL dumps |
+| R2 images | none (R2 has no versioning) | S3-compatible sync of the `cutetopop-images` bucket with a read-only R2 token |
+| KV cache | not needed: rebuilt from D1 by `POST /api/admin/sync` or the daily cron | |
+
+```bash
+node scripts/backup-d1.mjs --verify      # export to backups/d1/, test-restore it, keep the newest 12
+node scripts/backup-d1.mjs --dry-run     # show what would happen
+node scripts/backup-d1.mjs --restore-local backups/d1/<file>.sql   # load a dump into the wrangler dev DB
+```
+
+- Exports only read production, so a read-only API token is enough.
+- Each run appends a line to `backups/d1/backup-log.txt`. `backups/` is gitignored.
+- D1 exports can list a table before a table its foreign keys point at. The script's restore creates every table first, then loads the dump unchanged.
+- Takedowns: when an image is removed from the site, also remove it from the off-site copies.
 
 ## File Structure
 
