@@ -114,7 +114,7 @@ export default {
    * - Validates metadata completeness
    * - Auto-backfills missing metadata (small batches)
    */
-  async scheduled(event, env, ctx) {
+  async scheduled(event, env, _ctx) {
     console.log('Scheduled maintenance triggered at', new Date().toISOString());
     
     try {
@@ -230,18 +230,19 @@ async function handleAPI(request, env, url) {
       case '/artists':
         return await getPublicArtists(env, url.searchParams, corsHeaders);
       
-      default:
+      default: {
         // Check for /artists/:id pattern
         const artistMatch = path.match(/^\/artists\/(\d+)$/);
         if (artistMatch) {
           const artistId = parseInt(artistMatch[1]);
           return await getPublicArtist(env, artistId, corsHeaders);
         }
-        
+
         return new Response(JSON.stringify({ error: 'Not found' }), {
           status: 404,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
+      }
     }
   } catch (error) {
     console.error('API Error:', error);
