@@ -2,12 +2,19 @@ import { handleAdminRequest } from './admin/routes.js';
 import { syncKVCache } from './admin/sync.js';
 import { validateMetadata, backfillMetadata } from './admin/metadata-sync.js';
 import { getRandomImage } from './handlers/random.js';
+import { verifyAccessRequest } from './lib/access.js';
 
 // src/index.js - Worker with Image Transformations via fetch
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    
+
+    // www is an alias: send visitors to the bare domain (path and query kept)
+    if (url.hostname === 'www.cutetopop.com') {
+      url.hostname = 'cutetopop.com';
+      return Response.redirect(url.toString(), 301);
+    }
+
     // Fast path: Block aggressive polling bot (check first for early return)
     const userAgent = request.headers.get('User-Agent') || '';
     if (userAgent.includes('curly')) {
@@ -28,13 +35,13 @@ export default {
       });
     }
     
-    // Admin routes
-    if (url.pathname.startsWith('/admin')) {
-      return handleAdminRequest(request, env, url);
-    }
-
-    // Admin API routes
-    if (url.pathname.startsWith('/api/admin/')) {
+    // Admin routes and admin API routes: require a valid Cloudflare Access token
+    if (url.pathname.startsWith('/admin') || url.pathname.startsWith('/api/admin/')) {
+      const access = await verifyAccessRequest(request, env, url);
+      if (!access.ok) {
+        console.warn(`[ACCESS DENIED] ${url.hostname}${url.pathname} | ${access.reason}`);
+        return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
+      }
       return handleAdminRequest(request, env, url);
     }
 
