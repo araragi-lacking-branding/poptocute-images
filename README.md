@@ -39,171 +39,77 @@ However, I do intend this to be a critique, in the formal sense. Taking a hypoth
 
 # *cute* and *pop*
 
-A random image display site with metadata management, tagging, and attribution system powered by Cloudflare Workers, D1, R2, KV, and GitHub.
+A small random-image site at **https://cutetopop.com**, with tagging and artist attribution behind it. It runs entirely on Cloudflare (Workers, D1, R2, KV), and the code lives here on GitHub. Almost all of it was written, reviewed and deployed by AI agents. See [AGENTS.md](AGENTS.md) for the rules they work under.
 
-## Architecture
+## Current state
 
-- **Images**: Stored in Cloudflare R2 (hash-based names), not in this repository; see [Backups](#backups)
-- **Cache**: Cloudflare KV for fast global image list access
-- **Metadata**: Cloudflare D1 database (tags, credits, status)
-- **Image Transforms**: Cloudflare Image Resizing via `/cdn-cgi/image/` for WebP conversion
-- **Worker**: Cloudflare Workers (API + HTML serving + Admin UI)
-- **Deployment**: Cloudflare Workers Builds (GitHub integration) or `npx wrangler deploy`
+- **What's live:** four test banners (the "silly watermark" images above), shown at random. Every other image was removed from the site and from Cloudflare storage in October 2026.
+- **Attribution data stays:** the tag, credit and artist records (46 tags, 22 credits, 12 artists) are kept for when attributed works replace the test images.
+- **Admin:** an image and artist management UI at `/admin`, for the maintainer only.
+
+## How it works
+
+| Piece | Cloudflare product | What it holds or does |
+|---|---|---|
+| Worker (`src/`) | Workers | Serves the page, the public API, the admin UI and images. Runs a daily 3 AM UTC maintenance job. |
+| Images | R2 bucket `cutetopop-images` | Image files under hash-based names (`images/<hash>.jpg`). Not stored in this repository. |
+| Metadata | D1 database `cutetopop-db` | Images, tags, credits, artists, feedback (9 tables, 5 views). |
+| Image list cache | KV namespace | The active image list, rebuilt from D1 by the daily job or `POST /api/admin/sync`. |
+| Resizing | Image Resizing | WebP conversion via `/cdn-cgi/image/...`. |
+| Admin login | Cloudflare Access (Zero Trust) | Email one-time PIN in front of `/admin` and `/api/admin/*`. |
 
 ## Security
 
-- **Admin Access**: Protected by Cloudflare Access with email authentication
-  - The Worker also verifies the Access token (`Cf-Access-Jwt-Assertion`) on every `/admin` and `/api/admin/*` request, so admin stays closed on any hostname Access doesn't cover (`src/lib/access.js`)
-  - Only `cutetopop.com` serves the site; `www.cutetopop.com` redirects to it, and `workers.dev` and preview URLs are off (`wrangler.toml`)
-  - All `/admin` and `/admin/*` routes require authentication
-  - Restricted to specific email allowlist
-  - No hardcoded credentials in repository
-- **Environment Variables**: Sensitive configuration in `.env` and `.dev.vars` (gitignored)
-- **Resource Security**: Cloudflare D1, R2, and KV bindings managed via Wrangler
+- **Admin is locked twice.** Cloudflare Access protects `/admin` and `/api/admin/*` at the edge. The Worker also verifies the Access login token itself (`src/lib/access.js`) and returns 403 without a valid one. Even if a hostname or route slips past Access, admin stays closed.
+- **One public hostname.** `cutetopop.com` is the only way in. `www.cutetopop.com` redirects to it, and `workers.dev` and preview URLs are off (`wrangler.toml`).
+- **No secrets in the repo.** The IDs in `wrangler.toml` (database, bucket, KV namespace, Access team and app) are public identifiers. Local-only settings go in `.dev.vars`, which is gitignored.
+- **GitHub:** secret scanning with push protection, Dependabot alerts and security updates, and a protected `main` branch (pull requests and passing CI required, no force-pushes).
 
-## Current Status
+## API
 
-✅ **Phase 1: Complete**
-- 187 images migrated to R2 storage
-- Random image display working with KV caching
-- D1 database with full schema (6 tables, 4 views)
-- Worker serving from R2 with CDN optimization
-- WebP transformation via Cloudflare native handling
+**Public** (no login, JSON):
 
-✅ **Phase 2: Complete**
-- Tag system implemented (4 categories: content, character, creator, source)
-- Credit attribution system active
-- Admin UI fully functional at `/admin`
-- Image upload with R2 integration
-- KV sync capability for cache refresh
+| Endpoint | Returns |
+|---|---|
+| `GET /api/random` | One random active image with its metadata, credit and artist |
+| `GET /api/images?limit=&offset=` | Paged list of active images |
+| `GET /api/stats` | Counts: images, tags, credited artists, artists |
+| `GET /api/artists` | Artist profiles with image counts |
+| `GET /api/artists/:id` | One artist profile |
+| `GET /images.json` | The active image list (served from KV) |
+| `GET /images/<file>` | An image file from R2 |
 
-🚧 **Phase 3: In Progress**
-- Metadata curation for existing images
-- Tag management and bulk operations
-- Frontend attribution display enhancement
+**Admin** (Access login required): images (list, get, update, change status), tags (list, create, change status), artists (list, create, get, update, delete, change status, their images, link and unlink tags), upload, KV sync, and metadata backfill and validation. The admin UI pages are `/admin/images` and `/admin/artists`.
 
-🌐 **Phase 4: Future** (Long-term)
-- Public submission system
-- User feedback and contributions
-- Advanced moderation workflow
+The full contract is in [openapi-schema.yaml](openapi-schema.yaml) (also used for Cloudflare API Shield; see [docs/api.md](docs/api.md)). Keep it in sync with endpoint changes.
 
-## Database Schema
+## Local development
 
-### Tables
-- `images` - Image metadata and status
-- `tags` - Available tags organized by category
-- `tag_categories` - Flexible category system (content, character, creator, source)
-- `image_tags` - Many-to-many: active approved tags
-- `credits` - Artist/source attribution
-- `feedback` - User submissions (separate from active tags)
+You need Node.js 22 or later (CI uses 24) and a Cloudflare account with access to this project.
 
-### Tag Categories
-- **content**: What's in the image (cute, cat, food, pixel-art)
-- **character**: Specific characters (hello-kitty, pikachu)
-- **creator**: Original artist or studio
-- **source**: Original media (pokemon, sanrio, sailor-moon)
-
-## API Endpoints
-
-### Public API
-
-#### `GET /api/random`
-Get a random active image with metadata
-```json
-{
-  "id": 1,
-  "filename": "images/abc123def456.png",
-  "alt_text": "Cute cat",
-  "credit_name": "Artist Name",
-  "credit_url": "https://...",
-  "tags": [
-    {"name": "cute", "display_name": "Cute", "category": "content"},
-    {"name": "cat", "display_name": "Cat", "category": "content"}
-  ]
-}
-```
-
-#### `GET /api/images?limit=20&offset=0`
-List images with pagination
-
-#### `GET /api/stats`
-Get database statistics
-```json
-{
-  "total_images": 187,
-  "total_tags": 0,
-  "credited_artists": 0
-}
-```
-
-#### `GET /images.json`
-Dynamically generated list of all active images (cached in KV)
-
-### Admin API
-
-#### `GET /admin`
-Admin dashboard UI with image management interface
-
-#### `POST /api/admin/upload`
-Upload new image to R2 with automatic database insertion
-
-#### `POST /api/admin/sync`
-Sync D1 database to KV cache for performance optimization
-
-#### `GET /api/admin/images`
-Admin-only image listing with management capabilities
-
-## Local Development
-
-### Prerequisites
-- Node.js 16+
-- Wrangler CLI (`npm install -g wrangler`)
-- Cloudflare account with D1 enabled
-
-### Setup
 ```bash
-# Clone repository
 git clone https://github.com/araragi-lacking-branding/poptocute-images.git
 cd poptocute-images
+npm ci                      # installs the project's own Wrangler
+npx wrangler login          # browser sign-in to Cloudflare
 
-# Login to Cloudflare
-wrangler login
-
-# Run locally
-npx wrangler dev
-
-# Lint and run the offline tests (the same checks CI runs on every PR)
-npm run lint
+npm run lint                # the same checks CI runs on every pull request
 npm test
+
+npx wrangler dev            # local Worker at http://localhost:8787
 ```
 
-Local dev has no Cloudflare Access in front of it, so `/admin` returns 403. To use the admin UI locally, create `.dev.vars` (gitignored) containing `ACCESS_DEV_BYPASS = "true"`. Never set this in `wrangler.toml`.
+- **Admin locally:** `wrangler dev` has no Access in front of it, so `/admin` returns 403. Create `.dev.vars` containing `ACCESS_DEV_BYPASS = "true"` to use it. Never put this in `wrangler.toml`.
+- **Real data locally:** the local database starts empty. Load production data into it with `node scripts/backup-d1.mjs --verify`, then `node scripts/backup-d1.mjs --restore-local backups/d1/<file>.sql`.
+- **Local vs production:** D1 commands without `--remote` change only your local copy. With `--remote` they change production.
+- **Scripts that write data:** `scripts/test-artist-api.js` and `scripts/test-duplicate-prevention.js` create records. Run them only against `wrangler dev`.
 
-### Database Commands
+## Making changes and deploying
 
-**Query database**:
-```bash
-npx wrangler d1 execute cutetopop-db --remote --command "SELECT COUNT(*) FROM images"
-```
-
-**View images**:
-```bash
-npx wrangler d1 execute cutetopop-db --remote --command "SELECT id, filename, status FROM images LIMIT 10"
-```
-
-**Add a tag** (example):
-```bash
-npx wrangler d1 execute cutetopop-db --remote --command "INSERT INTO tags (name, display_name, category_id) VALUES ('cute', 'Cute', 1)"
-```
-
-## Deployment
-
-Automatic via Cloudflare Workers Builds:
-1. Push to `main` branch
-2. Workers Builds deploys automatically (shows as the `Workers Builds: cutetopop-worker` check on the commit)
-3. Changes live in ~2 minutes
-
-Workers Builds only deploys commits that touch its watch paths: `src/`, `public/`, `wrangler.toml`, `schema.sql`, `package.json` and `package-lock.json`. Docs, CI, script or test changes merge without a deploy. If a commit that touches those paths gets no Workers Builds check, look at the Worker's **Settings → Build** in the Cloudflare dashboard. Manual fallback: `npx wrangler deploy`.
+1. Branch, commit, and open a pull request. `main` can't be pushed to directly.
+2. CI runs lint, the offline tests and a build check. It must pass before merging.
+3. **Merging to `main` deploys** through Cloudflare Workers Builds, about 2 minutes later. It deploys only when the merge touches `src/`, `public/`, `wrangler.toml`, `schema.sql`, `package.json` or `package-lock.json`. Docs, CI, script and test changes don't deploy.
+4. The rollback is `npx wrangler rollback`. The manual deploy fallback is `npx wrangler deploy`.
 
 Routes and custom domains come from `wrangler.toml`. Wrangler can't delete plain routes created in the dashboard, so remove those there.
 
@@ -212,8 +118,8 @@ Routes and custom domains come from `wrangler.toml`. Wrangler can't delete plain
 | Data | Primary recovery | Off-site copy |
 |---|---|---|
 | D1 database | D1 Time Travel: `npx wrangler d1 time-travel restore cutetopop-db --timestamp=<ISO time>` | `scripts/backup-d1.mjs` SQL dumps |
-| R2 images | none (R2 has no versioning) | S3-compatible sync of the `cutetopop-images` bucket with a read-only R2 token |
-| KV cache | not needed: rebuilt from D1 by `POST /api/admin/sync` or the daily cron | |
+| R2 images | none (R2 has no versioning) | S3-compatible sync of the bucket with a read-only R2 token |
+| KV cache | not needed: rebuilt from D1 | |
 
 ```bash
 node scripts/backup-d1.mjs --verify      # export to backups/d1/, test-restore it, keep the newest 12
@@ -222,157 +128,45 @@ node scripts/backup-d1.mjs --restore-local backups/d1/<file>.sql   # load a dump
 ```
 
 - Exports only read production, so a read-only API token is enough.
-- Each run appends a line to `backups/d1/backup-log.txt`. `backups/` is gitignored.
+- Each run appends a line to `<out>/backup-log.txt` and records its outcome in `backups/backup-d1-last-run.txt`. `backups/` is gitignored.
 - D1 exports can list a table before a table its foreign keys point at. The script's restore creates every table first, then loads the dump unchanged.
 - Takedowns: when an image is removed from the site, also remove it from the off-site copies.
 
-## File Structure
+## Data model
+
+| Table | Holds |
+|---|---|
+| `images` | One row per image: file, status (`active`/`hidden`), dimensions, hash, license and notes, credit |
+| `tags`, `tag_categories` | Tags in four categories: `content`, `character`, `creator`, `source` |
+| `image_tags` | Which tags are on which image |
+| `credits` | Attribution for an image's source |
+| `artists`, `artist_tags` | Artist profiles, linked to their `creator` tags |
+| `feedback` | Visitor submissions, kept separate from approved tags |
+
+Views: `v_images_active`, `v_image_tags_by_category`, `v_tag_stats`, `v_artist_profiles`, `v_feedback_pending`. The base schema is in `schema.sql`, and later changes are in `migrations/`.
+
+## Repository map
 
 ```
-poptocute-images/
-├── docs/
-│   ├── api.md             # API documentation and Cloudflare Shield
-│   ├── maintenance.md     # Performance reports and maintenance
-│   └── ethics.md          # Artist profiles and attribution
-├── public/
-│   └── favicon.ico        # Site favicon
-├── src/
-│   ├── index.js           # Main Worker (routing, API, image serving)
-│   ├── static/
-│   │   ├── styles.css     # Extracted CSS styles
-│   │   └── app.js         # Extracted client-side JavaScript
-│   └── admin/
-│       ├── routes.js      # Admin API endpoints
-│       ├── ui.js          # Admin dashboard UI
-│       ├── upload.js      # R2 upload handling
-│       ├── sync.js        # KV sync functionality
-│       ├── artists.js     # Artist management functions
-│       ├── metadata-sync.js # Metadata backfill utilities
-│       └── metadata-extractor.js # Image metadata extraction
-├── scripts/
-│   ├── sync-kv.js         # Active: D1 to KV sync utility
-│   ├── backfill-image-metadata.js # Metadata backfill script
-│   ├── monitor-requests.ps1 # Request monitoring (PowerShell)
-│   ├── test-artist-api.js # Artist API testing
-│   ├── test-duplicate-prevention.js # Duplicate prevention tests
-│   ├── test-lcp.ps1       # LCP performance testing
-│   ├── test-normalization-v2.js # Normalization tests
-│   └── archive/
-│       └── migration/     # Historical migration scripts
-│           ├── add-artist-profiles.sql
-│           ├── add-case-insensitive-artist-name.sql
-│           ├── add-image-metadata-fields.sql
-│           ├── add-permissions-field.sql
-│           ├── add-status-fields.sql
-│           ├── auto-assign-creator-tags.js
-│           ├── link-credits-to-artists.sql
-│           ├── migrate-credits-sync.js
-│           ├── sync-creators-to-artists.sql
-│           ├── sync-credits-from-creator-tags.js
-│           └── test-credits-sync.js
-├── schema.sql             # D1 database schema
-├── wrangler.toml          # Worker config (D1, R2, KV bindings)
-├── package.json           # Dependencies and scripts
-├── eslint.config.js       # ESLint configuration
-└── README.md              # This file
+src/
+  index.js                   routing, public API, page, image serving, admin gate, www redirect
+  handlers/random.js         random image selection
+  lib/access.js              Cloudflare Access token verification
+  lib/metadata-extractor.js  image metadata parsing (uploads, backfills)
+  admin/                     admin UI (ui.js), API (routes.js), upload, KV sync, artists, metadata sync
+  static/                    the page's CSS and browser JavaScript
+test/                        offline node:test suites (npm test)
+scripts/                     backup, KV sync, metadata backfill, and local test/monitoring helpers
+migrations/                  D1 schema migrations
+docs/                        API Shield notes (api.md), attribution ethics (ethics.md)
+.github/                     CI workflow, Dependabot config
+AGENTS.md                    rules for AI agents working here (CLAUDE.md points to it)
+wrangler.toml                Worker config: bindings, routes, cron, Access identifiers
+openapi-schema.yaml/.json    API contract
 ```
 
-## Adding New Images
+The other Markdown files in the root (`IMPLEMENTATION_SUMMARY.md`, `PERFORMANCE_REPORT.md` and similar) are working notes the agents wrote during earlier changes. They're kept as part of the project's record.
 
-### Via Admin UI (Recommended)
-1. Navigate to `/admin` on your deployed site
-2. Use the upload interface to add images
-3. Images are automatically uploaded to R2 and added to D1 database
+## Contact
 
-### Via Script (Bulk Operations)
-1. Add image files to `public/images/` (for backup)
-2. Use archived migration scripts in `scripts/archive/migration/` if needed
-3. Sync KV cache: `node scripts/sync-kv.js`
-4. Commit and push to GitHub
-
-**Note:** The migration to R2 is complete. New images should primarily be added via the admin UI.
-
-## Maintenance Tasks
-
-### Add new tag category
-```sql
-INSERT INTO tag_categories (name, display_name, description, sort_order) 
-VALUES ('style', 'Art Style', 'Visual style and technique', 5);
-```
-
-### Tag an image
-```sql
--- First, create tag if needed
-INSERT INTO tags (name, display_name, category_id) 
-VALUES ('kawaii', 'Kawaii', 1);
-
--- Then link to image
-INSERT INTO image_tags (image_id, tag_id) 
-VALUES (1, 1);
-```
-
-### Update image credit
-```sql
--- Create credit if needed
-INSERT INTO credits (name, url, platform, verified) 
-VALUES ('Artist Name', 'https://...', 'twitter', 1);
-
--- Update image
-UPDATE images SET credit_id = 2 WHERE id = 1;
-```
-
-## Troubleshooting
-
-### Images not displaying
-- Check database: `SELECT COUNT(*) FROM images WHERE status='active'`
-- Verify images exist in R2 bucket (Cloudflare Dashboard → R2)
-- Check KV cache: Sync using `/api/admin/sync` or `node scripts/sync-kv.js`
-- Check browser console for errors
-- Verify R2 binding in `wrangler.toml`
-
-### Database connection issues
-- Verify `wrangler.toml` has correct database_id
-- Run `wrangler login` to refresh authentication
-- Check Cloudflare dashboard for D1 database status
-
-### KV cache out of sync
-- Use admin panel: Navigate to `/admin` and click "Sync KV Cache"
-- Or run: `node scripts/sync-kv.js`
-- Verify KV namespace binding in `wrangler.toml`
-
-### Build fails
-- Check observability logs in Cloudflare dashboard
-- Verify wrangler.toml syntax
-- Ensure all bindings are configured (D1, R2, KV)
-- Check that R2 bucket exists and is accessible
-
-## Contributing
-
-Currently admin-only. Public contribution system planned for Phase 4.
-
-## License
-
-Images may have various licenses. Working on proper attribution system.
-
-## Performance
-
-- **R2 Storage**: Images served from Cloudflare's edge network
-- **KV Caching**: Image list cached globally for <50ms load times
-- **WebP Optimization**: Automatic format conversion via Cloudflare Image Resizing
-- **CDN**: Full Cloudflare CDN integration with aggressive caching
-
-## Links
-
-- **Live Site**: https://cutetopop.com
-- **GitHub**: https://github.com/araragi-lacking-branding/poptocute-images
-- **Cloudflare Dashboard**: https://dash.cloudflare.com
-
-## Project History
-
-- **Initial build**: Static site with local images
-- **Phase 1**: Migration to Cloudflare Workers + D1 database
-- **Phase 2**: R2 migration for image storage, KV caching implementation
-- **Phase 3**: Admin panel development, upload functionality
-- **Recent**: WebP optimization, repository cleanup (archived obsolete migration scripts)
-
-All development tracked in git history. Migration scripts preserved in `scripts/archive/` for reference.
+Questions, takedown requests, or anything else: **lambda@cutetopop.com**.
