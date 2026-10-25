@@ -9,7 +9,7 @@
  * @param {string} filename - Original filename
  * @returns {Object} Complete metadata object
  */
-export function extractImageMetadata(buffer, mimeType, filename = '') {
+export function extractImageMetadata(buffer, mimeType, _filename = '') {
   const metadata = {
     // Basic technical data
     width: null,
@@ -158,7 +158,6 @@ function parseJPEG(buffer, view, metadata) {
   metadata.bitDepth = 8; // JPEG is always 8-bit per channel
   
   let offset = 2;
-  let exifData = {};
   
   while (offset < buffer.byteLength - 8) {
     if (view.getUint8(offset) !== 0xFF) break;
@@ -192,7 +191,7 @@ function parseJPEG(buffer, view, metadata) {
       );
       
       if (exifHeader === 'Exif') {
-        exifData = parseExifData(buffer, offset + 10, size - 8);
+        const exifData = parseExifData(buffer, offset + 10, size - 8);
         
         // Extract key EXIF fields
         if (exifData.Orientation) {
@@ -359,7 +358,7 @@ function parseWebP(buffer, view, metadata) {
  * Parse EXIF data from JPEG APP1 marker
  * Simplified version - extracts key fields
  */
-function parseExifData(buffer, exifOffset, exifLength) {
+function parseExifData(buffer, exifOffset, _exifLength) {
   const exifData = {};
   
   try {
@@ -379,7 +378,6 @@ function parseExifData(buffer, exifOffset, exifLength) {
     for (let i = 0; i < numEntries; i++) {
       const entryOffset = ifdPosition + 2 + (i * 12);
       const tag = view.getUint16(entryOffset, littleEndian);
-      const type = view.getUint16(entryOffset + 2, littleEndian);
       const count = view.getUint32(entryOffset + 4, littleEndian);
       const valueOffset = entryOffset + 8;
       
@@ -412,7 +410,7 @@ function parseExifData(buffer, exifOffset, exifLength) {
   return exifData;
 }
 
-function readExifString(view, offset, count, littleEndian) {
+function readExifString(view, offset, count, _littleEndian) {
   let str = '';
   for (let i = 0; i < Math.min(count, 100); i++) {
     const char = view.getUint8(offset + i);
