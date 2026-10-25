@@ -1,0 +1,16 @@
+# Monthly version-update PRs for npm dev dependencies (wrangler, eslint) and the
+# GitHub Actions used in CI. Security updates are separate and arrive as needed.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      dev-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
