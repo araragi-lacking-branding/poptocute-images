@@ -3,13 +3,15 @@
   "version": "1.1.0",
   "scripts": {
     "build": "echo 'No build needed'",
-    "lint": "eslint src/**/*.js --ignore-pattern src/static/**",
+    "lint": "eslint src test",
     "deploy": "wrangler deploy && npm run post-deploy",
     "post-deploy": "curl -X POST https://cutetopop.com/api/admin/sync || echo 'Sync triggered (may require authentication)'",
     "test": "node --test \"test/**/*.test.mjs\""
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "eslint": "^10.13.0",
+    "globals": "^17.13.0",
     "wrangler": "^4.152.0"
   },
   "allowScripts": {
