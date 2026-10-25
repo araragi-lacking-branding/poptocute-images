@@ -9,7 +9,7 @@
     "test": "node --test \"test/**/*.test.mjs\""
   },
   "devDependencies": {
-    "eslint": "^9.39.1",
+    "eslint": "^10.13.0",
     "wrangler": "^4.152.0"
   },
   "allowScripts": {
