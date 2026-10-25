@@ -26,3 +26,6 @@ public/images/
 # OS files
 Thumbs.db
 desktop.ini
+
+# Scratch files
+tmp/
