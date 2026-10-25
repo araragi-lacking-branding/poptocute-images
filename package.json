@@ -4,8 +4,7 @@
   "scripts": {
     "build": "echo 'No build needed'",
     "lint": "eslint src test scripts/backup-d1.mjs",
-    "deploy": "wrangler deploy && npm run post-deploy",
-    "post-deploy": "curl -X POST https://cutetopop.com/api/admin/sync || echo 'Sync triggered (may require authentication)'",
+    "deploy": "wrangler deploy",
     "test": "node --test \"test/**/*.test.mjs\""
   },
   "devDependencies": {
