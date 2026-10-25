@@ -14,8 +14,10 @@
 // (`npx wrangler d1 time-travel restore cutetopop-db --timestamp=...`); these
 // dumps are the off-site copy if the database or account is lost.
 //
-// Every run appends one line to <out>/backup-log.txt. Wrangler prints a one-hour
-// download link for each export; it never reaches this script's output or log.
+// Every run appends one line to <out>/backup-log.txt, and overwrites
+// backups/backup-d1-last-run.txt in the repo with its outcome (including the error
+// message on failure). Wrangler prints a one-hour download link for each export;
+// it never reaches this script's output or logs.
 
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -196,11 +198,28 @@ function main() {
   console.log(summary);
 }
 
+// Record each run's outcome at a fixed path inside the repo, so a failure is
+// readable even when the caller (e.g. a SyncBackPro pre-run step) only shows an
+// exit code and --out itself is the problem
+function writeLastRun(status, detail) {
+  try {
+    const dir = path.join(REPO_ROOT, 'backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const args = process.argv.slice(2).join(' ') || '(no options)';
+    fs.writeFileSync(path.join(dir, 'backup-d1-last-run.txt'),
+      `${new Date().toISOString()} ${status}\noptions: ${args}\n${detail ? detail + '\n' : ''}`);
+  } catch {
+    // Never let the status file hide the real outcome
+  }
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     main();
+    writeLastRun('OK (exit 0)', '');
   } catch (error) {
     console.error(`backup-d1: ${error.message}`);
+    writeLastRun('FAILED (exit 1)', error.message);
     process.exit(1);
   }
 }
