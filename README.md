@@ -48,11 +48,13 @@ A random image display site with metadata management, tagging, and attribution s
 - **Metadata**: Cloudflare D1 database (tags, credits, status)
 - **Image Transforms**: Cloudflare Image Resizing via `/cdn-cgi/image/` for WebP conversion
 - **Worker**: Cloudflare Workers (API + HTML serving + Admin UI)
-- **Deployment**: Cloudflare Pages with GitHub integration
+- **Deployment**: Cloudflare Workers Builds (GitHub integration) or `npx wrangler deploy`
 
 ## Security
 
 - **Admin Access**: Protected by Cloudflare Access with email authentication
+  - The Worker also verifies the Access token (`Cf-Access-Jwt-Assertion`) on every `/admin` and `/api/admin/*` request, so admin stays closed on any hostname Access doesn't cover (`src/lib/access.js`)
+  - Only `cutetopop.com` serves the site; `www.cutetopop.com` redirects to it, and `workers.dev` and preview URLs are off (`wrangler.toml`)
   - All `/admin` and `/admin/*` routes require authentication
   - Restricted to specific email allowlist
   - No hardcoded credentials in repository
@@ -171,6 +173,8 @@ wrangler login
 npx wrangler dev
 ```
 
+Local dev has no Cloudflare Access in front of it, so `/admin` returns 403. To use the admin UI locally, create `.dev.vars` (gitignored) containing `ACCESS_DEV_BYPASS = "true"`. Never set this in `wrangler.toml`.
+
 ### Database Commands
 
 **Query database**:
@@ -190,10 +194,14 @@ npx wrangler d1 execute cutetopop-db --remote --command "INSERT INTO tags (name,
 
 ## Deployment
 
-Automatic via Cloudflare Pages:
+Automatic via Cloudflare Workers Builds:
 1. Push to `main` branch
-2. Cloudflare builds and deploys automatically
+2. Workers Builds deploys automatically (shows as the `Workers Builds: cutetopop-worker` check on the commit)
 3. Changes live in ~2 minutes
+
+If a commit on `main` has no Workers Builds check, the GitHub connection isn't triggering: check the Worker's **Settings → Build** in the Cloudflare dashboard. Manual fallback: `npx wrangler deploy`.
+
+Routes and custom domains come from `wrangler.toml`. Wrangler can't delete plain routes created in the dashboard, so remove those there.
 
 ## File Structure
 
