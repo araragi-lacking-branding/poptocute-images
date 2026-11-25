@@ -10,7 +10,7 @@ import { PUBLIC_IMAGE_FROM, PUBLIC_IMAGE_WHERE, isImageKey, isImagePublic } from
 
 // src/index.js - Worker with Image Transformations via fetch
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env, _ctx) {
     const url = new URL(request.url);
 
     // www is an alias: send visitors to the bare domain (path and query kept)
@@ -22,14 +22,8 @@ export default {
     // Fast path: Block aggressive polling bot (check first for early return)
     const userAgent = request.headers.get('User-Agent') || '';
     if (userAgent.includes('curly')) {
-      // Log asynchronously to not block response
-      ctx.waitUntil(
-        Promise.resolve().then(() => {
-          const ip = request.headers.get('CF-Connecting-IP') || 'Unknown';
-          const country = request.headers.get('CF-IPCountry') || 'Unknown';
-          console.log(`[BLOCKED] ${ip} | ${country} | curly-0.0.1`);
-        })
-      );
+      // Not logged: the bot sends ~12,000 requests a day, and the old log line
+      // stored each request's IP address (minimal tracking, see README)
       return new Response('Rate limit exceeded. Please reduce request frequency.', { 
         status: 429,
         headers: {

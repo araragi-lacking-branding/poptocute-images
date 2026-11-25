@@ -30,13 +30,17 @@ directory = "./public"
 enabled = false
 head_sampling_rate = 1
 
+# Minimal tracking: keep the Worker's own console/error logs (they hold no
+# visitor details), but not the automatic per-request "invocation logs" and
+# traces, which store each visitor's IP, user agent, city, postcode and
+# coordinates. Use `npx wrangler tail` to watch live requests when debugging.
 [observability.logs]
 enabled = true
 head_sampling_rate = 1
-invocation_logs = true
+invocation_logs = false
 
 [observability.traces]
-enabled = true
+enabled = false
 head_sampling_rate = 1
 
 # Smart Placement for optimal worker execution location
