@@ -21,7 +21,7 @@ Work so that a person can follow it later: explain what you're changing and why,
 - `src/admin/upload.js`: upload flow (R2 put, SHA-256 deduplication into `images.file_hash`, metadata extraction).
 - `src/handlers/random.js`: random image selection.
 - `src/lib/metadata-extractor.js`: image metadata parsing used by uploads and backfills.
-- `src/blog/pages.js`, `src/blog/data.js`: the public blog (`/blog`, server-rendered, no client JS, strict CSP) and its D1 queries. Public reads return only published posts and active tags.
+- `src/blog/pages.js`, `src/blog/data.js`: the public blog (`/blog`, server-rendered, no client JS of our own, strict CSP with no script-src: Cloudflare appends a nonce-only one for the scripts it injects, Web Analytics and bot detection) and its D1 queries. Public reads return only published posts and active tags.
 - `src/admin/blog.js`: `/api/admin/posts` and the `/admin/blog` editor. The editor's browser code is a real function serialised with `toString()`; keep the `__name` shim in its `<script>` (Wrangler's bundler inserts `__name(...)` calls).
 - `src/lib/markdown.js`: the blog's Markdown subset. It escapes everything first and allows only http(s)/relative links and `/images/` images. Keep it that way: posts must not be able to add scripts or third-party requests.
 - `src/lib/fonts.js`, `public/fonts/`: the site font (BIZ UDMincho, SIL OFL), self-hosted so visitors never contact a font provider. Use `MINCHO_STACK` and `FONT_HEAD` on any page that shows site text; pages with a CSP need `style-src 'self'` and `font-src 'self'`. Regenerate with `node scripts/self-host-font.mjs` (new version = new directory, so the one-year cache in `public/_headers` stays safe). Don't link Google Fonts directly.
