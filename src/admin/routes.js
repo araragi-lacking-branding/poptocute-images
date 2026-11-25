@@ -2,6 +2,7 @@
 // Admin API routes and authentication
 
 import { generateAdminUI } from './ui.js';
+import { generateBlogAdminUI, handleBlogAdminAPI, handleBlogPreview } from './blog.js';
 import { handleSync, syncKVCache } from './sync.js';
 import { handleUpload } from './upload.js';
 import { handleMetadataBackfill, handleMetadataValidation } from './metadata-sync.js';
@@ -43,6 +44,22 @@ export async function handleAdminRequest(request, env, url) {
         'Cache-Control': 'no-store, no-cache, must-revalidate'
       }
     });
+  }
+
+  // Serve admin blog editor
+  if (path === '/admin/blog') {
+    return new Response(generateBlogAdminUI(), {
+      headers: {
+        'Content-Type': 'text/html;charset=UTF-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate'
+      }
+    });
+  }
+
+  // Preview any post (drafts included) as it will look on the public blog
+  const previewMatch = path.match(/^\/admin\/blog\/preview\/(\d+)$/);
+  if (previewMatch) {
+    return handleBlogPreview(env, url, parseInt(previewMatch[1], 10));
   }
 
   // Admin API routes
@@ -87,6 +104,10 @@ async function handleAdminAPI(request, env, url) {
   }
 
   try {
+    // /api/admin/posts[/:id] - blog posts (src/admin/blog.js)
+    const blogResponse = await handleBlogAdminAPI(request, env, path, corsHeaders);
+    if (blogResponse) return blogResponse;
+
     // GET /api/admin/tags - Get all tags organized by category
     if (path === '/tags' && method === 'GET') {
       return await getAllTags(env, corsHeaders);
