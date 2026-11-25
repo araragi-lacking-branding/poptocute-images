@@ -3,6 +3,7 @@ import { syncKVCache } from './admin/sync.js';
 import { validateMetadata, backfillMetadata } from './admin/metadata-sync.js';
 import { getRandomImage } from './handlers/random.js';
 import { verifyAccessRequest } from './lib/access.js';
+import { handleBlogRequest } from './blog/pages.js';
 import { isCrossSiteWrite, withAdminHeaders } from './lib/request-guards.js';
 import { escapeHtml } from './lib/html.js';
 import { PUBLIC_IMAGE_FROM, PUBLIC_IMAGE_WHERE, isImageKey, isImagePublic } from './lib/visibility.js';
@@ -55,6 +56,11 @@ export default {
     // Dynamic images.json generation
     if (url.pathname === '/images.json') {
       return getImagesList(env);
+    }
+
+    // Blog: public, server-rendered pages (src/blog/pages.js)
+    if (url.pathname === '/blog' || url.pathname.startsWith('/blog/')) {
+      return handleBlogRequest(request, env, url);
     }
 
     // Root path
@@ -1145,6 +1151,7 @@ async function serveMainPage(env) {
         </div>
 
         <div class="footer-link">
+          <a href="/blog">blog</a> ·
           <a href="https://github.com/araragi-lacking-branding/poptocute-images" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
       </div>

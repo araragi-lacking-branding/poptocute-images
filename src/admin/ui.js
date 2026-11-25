@@ -774,6 +774,7 @@ export function generateAdminUI(activeView = 'images') {
         <div class="nav-tabs">
           <a href="/admin/images" class="nav-tab ${isImagesActive ? 'active' : ''}">📸 Images & Tags</a>
           <a href="/admin/artists" class="nav-tab ${isArtistsActive ? 'active' : ''}">👤 Artist Profiles</a>
+          <a href="/admin/blog" class="nav-tab">📝 Blog</a>
         </div>
         <div class="stats">
           <span id="stat-images">Loading...</span>

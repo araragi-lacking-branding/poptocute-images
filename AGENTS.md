@@ -21,6 +21,9 @@ Work so that a person can follow it later: explain what you're changing and why,
 - `src/admin/upload.js`: upload flow (R2 put, SHA-256 deduplication into `images.file_hash`, metadata extraction).
 - `src/handlers/random.js`: random image selection.
 - `src/lib/metadata-extractor.js`: image metadata parsing used by uploads and backfills.
+- `src/blog/pages.js`, `src/blog/data.js`: the public blog (`/blog`, server-rendered, no client JS, strict CSP) and its D1 queries. Public reads return only published posts and active tags.
+- `src/admin/blog.js`: `/api/admin/posts` and the `/admin/blog` editor. The editor's browser code is a real function serialised with `toString()`; keep the `__name` shim in its `<script>` (Wrangler's bundler inserts `__name(...)` calls).
+- `src/lib/markdown.js`: the blog's Markdown subset. It escapes everything first and allows only http(s)/relative links and `/images/` images. Keep it that way: posts must not be able to add scripts or third-party requests.
 - `openapi-schema.yaml`: the API contract. Keep it in sync with endpoint changes.
 - `wrangler.toml`: bindings, routes, cron, and the Access identifiers (`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`).
 - `test/`: offline `node:test` suites. They need no network or Cloudflare account.
@@ -52,6 +55,7 @@ Work so that a person can follow it later: explain what you're changing and why,
 - `npx wrangler dev`: local Worker. It has no Access in front, so `/admin` returns 403 unless `.dev.vars` contains `ACCESS_DEV_BYPASS = "true"`.
 - Local data: `node scripts/backup-d1.mjs --verify` (export from production), then `node scripts/backup-d1.mjs --restore-local backups/d1/<file>.sql`.
 - D1 queries: `npx wrangler d1 execute cutetopop-db --remote --command "SELECT ..."`. Writes to `--remote` change production; use `--local` unless production is the intent.
+- Schema migrations: `npx wrangler d1 execute cutetopop-db --local --file migrations/<file>.sql`. Never `wrangler d1 migrations apply`: `d1_migrations` is empty on both databases (0001-0004 were applied by hand), so it would re-run them. A migration that new code depends on must reach production before or with the deploy.
 - `scripts/test-artist-api.js` and `scripts/test-duplicate-prevention.js` **write data**. Run them only against `wrangler dev`.
 - Manual KV sync: `POST /api/admin/sync`, or `node scripts/sync-kv.js`.
 

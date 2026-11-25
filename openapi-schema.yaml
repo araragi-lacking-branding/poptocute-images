@@ -463,8 +463,237 @@ paths:
                   error:
                     type: string
 
+  # Blog. The public blog is server-rendered HTML, not JSON: /blog, /blog/{slug},
+  # /blog/tag/{category}/{name} and the Atom feed /blog/feed.xml (src/blog/pages.js).
+  # The editor UI is /admin/blog; /admin/blog/preview/{id} shows any post as it will look.
+  /api/admin/posts:
+    get:
+      tags:
+        - admin
+      summary: List all blog posts
+      description: Every post in any status (drafts first), with all attached tags including hidden ones. Bodies are omitted.
+      operationId: listPosts
+      responses:
+        '200':
+          description: All posts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+        '503':
+          description: Blog tables missing (migrations/0005_add_blog.sql not applied)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+        - admin
+      summary: Create a blog post
+      operationId: createPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  post:
+                    $ref: '#/components/schemas/Post'
+        '400':
+          description: Validation failed (`error` joins the messages, `errors` lists them)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Another post already uses that slug
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/admin/posts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - admin
+      summary: Get one blog post with its body
+      operationId: getPost
+      responses:
+        '200':
+          description: The post
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  post:
+                    $ref: '#/components/schemas/Post'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+        - admin
+      summary: Replace a blog post
+      description: The editor always sends the whole post. `published_at` is set the first time a post is published and kept after that.
+      operationId: updatePost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  post:
+                    $ref: '#/components/schemas/Post'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Another post already uses that slug
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - admin
+      summary: Delete a blog post and its tag links (the tags themselves are kept)
+      operationId: deletePost
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   schemas:
+    PostInput:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 80
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          description: Made from the title when empty (or post-YYYYMMDDhhmmss if the title has no Latin letters)
+        summary:
+          type: string
+          maxLength: 500
+          description: Shown in lists; when empty, the first paragraph is used
+        body:
+          type: string
+          maxLength: 100000
+          description: Markdown subset (src/lib/markdown.js). `[[name]]` or `[[category:name]]` links a tag from the main tag tables.
+        status:
+          type: string
+          enum: [draft, published, hidden]
+          default: draft
+        tag_ids:
+          type: array
+          maxItems: 50
+          items:
+            type: integer
+          description: Ids from the main tags table. Unknown ids are skipped.
+
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+          nullable: true
+        body:
+          type: string
+          description: Only on single-post responses
+        status:
+          type: string
+          enum: [draft, published, hidden]
+        published_at:
+          type: string
+          nullable: true
+          example: '2026-11-25 18:09:00'
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              display_name:
+                type: string
+              category:
+                type: string
+              status:
+                type: string
+              href:
+                type: string
+                example: /blog/tag/creator/studio-shaft
+
     Error:
       type: object
       properties:
