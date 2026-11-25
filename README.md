@@ -83,7 +83,7 @@ A small random-image site at **https://cutetopop.com**, with tagging and artist 
 | `GET /images.json` | The active image list (served from KV) |
 | `GET /images/<file>` | An image file from R2 |
 
-**Blog** (public HTML pages, no JavaScript, no third-party requests):
+**Blog** (public HTML pages, no JavaScript of our own; the only scripts that run are the ones Cloudflare injects into every page: Web Analytics for cookieless page-view counts, and bot detection):
 
 | Page | Shows |
 |---|---|

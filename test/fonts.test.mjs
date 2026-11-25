@@ -56,6 +56,24 @@ test('fonts are cached for a year (immutable paths)', () => {
   assert.match(headers, /^\/fonts\/\*\r?\n\s+Cache-Control: public, max-age=31536000, immutable/m);
 });
 
+test('blog text is all Mincho: sans-serif only on tag pills and the preview banner', () => {
+  const src = readFileSync(path.join(root, 'src', 'blog', 'pages.js'), 'utf8');
+  const styles = src.slice(src.indexOf('const STYLES'), src.indexOf('`;', src.indexOf('const STYLES')));
+  const sansRules = [...styles.matchAll(/([^{}]+)\{[^}]*sans-serif[^}]*\}/g)].map(m => m[1].trim());
+  assert.deepEqual(sansRules, ['.tag', '.preview-banner']);
+});
+
+test('blog CSP: no scripts of our own (Cloudflare adds its nonce), Web Analytics may report', async () => {
+  const DB = createD1({ files: [...PROD_SCHEMA, 'migrations/0005_add_blog.sql'] });
+  const res = await worker.fetch(new Request('http://localhost:8787/blog'), { DB, IMAGES_CACHE: kv }, ctx);
+  const csp = Object.fromEntries(res.headers.get('Content-Security-Policy').split(';').map(d => {
+    const [k, ...v] = d.trim().split(/\s+/); return [k, v];
+  }));
+  assert.deepEqual(csp['default-src'], ["'none'"]);
+  assert.equal(csp['script-src'], undefined, 'Cloudflare appends a nonce-only script-src; a second one would be ignored');
+  assert.deepEqual(csp['connect-src'], ["'self'", 'https://cloudflareinsights.com']);
+});
+
 test('main page, blog and editor link the font; the blog CSP allows it', async () => {
   const DB = createD1({ files: [...PROD_SCHEMA, 'migrations/0005_add_blog.sql'] });
   const env = { DB, IMAGES_CACHE: kv, ACCESS_TEAM_DOMAIN: 't.cloudflareaccess.com', ACCESS_AUD: 'aud' };

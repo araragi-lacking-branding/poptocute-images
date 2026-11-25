@@ -1,5 +1,6 @@
 // src/blog/pages.js
-// Public blog pages, rendered on the server with no client JavaScript:
+// Public blog pages, rendered on the server with no client JavaScript of our own
+// (only Cloudflare Web Analytics, see PAGE_HEADERS):
 //   /blog                       newest published posts (?page=N for older ones)
 //   /blog/<slug>                one post
 //   /blog/tag/<category>/<name> a tag from the main tag tables and the posts about it
@@ -15,10 +16,14 @@ import {
 const PAGE_SIZE = 10;
 const SITE_TITLE = '*cute* and *pop*';
 
-// No scripts, no third-party anything; images, the font and its stylesheet only from this site
+// No scripts of our own; images, the font and its stylesheet only from this site.
+// Deliberately no script-src: on the way out Cloudflare appends
+// "script-src 'none' 'nonce-…'" and puts that nonce on the scripts it injects
+// (Web Analytics, bot detection), so only those run. connect-src lets Web Analytics
+// (cookieless page views) report, plus Cloudflare's same-origin /cdn-cgi/ calls.
 const PAGE_HEADERS = {
   'Content-Type': 'text/html; charset=UTF-8',
-  'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
 };
@@ -35,7 +40,6 @@ const STYLES = `
   .site .section { color: #999; font-size: 0.9rem; text-decoration: none; }
   h1 { font-size: 1.8rem; font-weight: normal; line-height: 1.35; margin: 0 0 0.35rem; }
   h2, h3, h4 { font-weight: normal; line-height: 1.4; margin: 2rem 0 0.5rem; }
-  .meta, .pager, .empty, footer { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   .meta { color: #999; font-size: 0.8rem; margin: 0 0 0.75rem; }
   .posts { list-style: none; padding: 0; margin: 0; }
   .posts li { margin: 0 0 2.5rem; }
