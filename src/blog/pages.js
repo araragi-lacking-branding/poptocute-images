@@ -17,13 +17,14 @@ const PAGE_SIZE = 10;
 const SITE_TITLE = '*cute* and *pop*';
 
 // No scripts of our own; images, the font and its stylesheet only from this site.
-// Deliberately no script-src: on the way out Cloudflare appends
-// "script-src 'none' 'nonce-…'" and puts that nonce on the scripts it injects
-// (Web Analytics, bot detection), so only those run. connect-src lets Web Analytics
-// (cookieless page views) report, plus Cloudflare's same-origin /cdn-cgi/ calls.
+// The one script allowed is Cloudflare Web Analytics (cookieless page views), which
+// Cloudflare injects; connect-src lets it report, plus same-origin /cdn-cgi/ calls.
+// Inline scripts stay blocked, so Bot Fight Mode's per-request inline detection
+// snippet doesn't run on blog pages (Bot Fight Mode itself still works at the edge).
+// (While Zaraz was on, it appended a nonce-only script-src instead; it's off now.)
 const PAGE_HEADERS = {
   'Content-Type': 'text/html; charset=UTF-8',
-  'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
 };

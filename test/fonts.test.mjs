@@ -72,14 +72,14 @@ test('blog text is all Mincho: sans-serif only on tag pills and the preview bann
   assert.deepEqual(sansRules, ['.tag', '.preview-banner']);
 });
 
-test('blog CSP: no scripts of our own (Cloudflare adds its nonce), Web Analytics may report', async () => {
+test('blog CSP: the only script is Cloudflare Web Analytics; no inline scripts', async () => {
   const DB = createD1({ files: [...PROD_SCHEMA, 'migrations/0005_add_blog.sql'] });
   const res = await worker.fetch(new Request('http://localhost:8787/blog'), { DB, IMAGES_CACHE: kv }, ctx);
   const csp = Object.fromEntries(res.headers.get('Content-Security-Policy').split(';').map(d => {
     const [k, ...v] = d.trim().split(/\s+/); return [k, v];
   }));
   assert.deepEqual(csp['default-src'], ["'none'"]);
-  assert.equal(csp['script-src'], undefined, 'Cloudflare appends a nonce-only script-src; a second one would be ignored');
+  assert.deepEqual(csp['script-src'], ['https://static.cloudflareinsights.com']);
   assert.deepEqual(csp['connect-src'], ["'self'", 'https://cloudflareinsights.com']);
 });
 
