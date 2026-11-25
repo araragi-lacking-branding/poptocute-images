@@ -3,6 +3,9 @@ import { syncKVCache } from './admin/sync.js';
 import { validateMetadata, backfillMetadata } from './admin/metadata-sync.js';
 import { getRandomImage } from './handlers/random.js';
 import { verifyAccessRequest } from './lib/access.js';
+import { isCrossSiteWrite, withAdminHeaders } from './lib/request-guards.js';
+import { escapeHtml } from './lib/html.js';
+import { PUBLIC_IMAGE_FROM, PUBLIC_IMAGE_WHERE, isImageKey, isImagePublic } from './lib/visibility.js';
 
 // src/index.js - Worker with Image Transformations via fetch
 export default {
@@ -42,7 +45,12 @@ export default {
         console.warn(`[ACCESS DENIED] ${url.hostname}${url.pathname} | ${access.reason}`);
         return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
       }
-      return handleAdminRequest(request, env, url);
+      // Writes must come from this site's own admin pages (CSRF, src/lib/request-guards.js)
+      if (isCrossSiteWrite(request, env, url)) {
+        console.warn(`[CROSS-SITE WRITE BLOCKED] ${request.method} ${url.pathname}`);
+        return new Response('Forbidden: cross-site request', { status: 403, headers: { 'Content-Type': 'text/plain' } });
+      }
+      return withAdminHeaders(await handleAdminRequest(request, env, url));
     }
 
     // Public API Routes
@@ -63,40 +71,7 @@ export default {
     // Serve images from R2
     // Support /cdn-cgi/image/ paths for Cloudflare Image Resizing
     if (url.pathname.startsWith('/images/') || url.pathname.includes('/cdn-cgi/image/')) {
-      // Extract actual image path
-      let filename;
-      
-      if (url.pathname.includes('/cdn-cgi/image/')) {
-        // Path like: /cdn-cgi/image/format=webp/images/abc.png
-        // Extract: images/abc.png
-        const match = url.pathname.match(/\/images\/.+$/);
-        if (match) {
-          filename = match[0].substring(1); // Remove leading slash
-        } else {
-          return new Response('Invalid cdn-cgi path', { status: 400 });
-        }
-      } else {
-        // Regular path: /images/abc.png
-        filename = url.pathname.substring(1); // Remove leading slash
-      }
-      
-      try {
-        const object = await env.IMAGES.get(filename);
-        if (!object) {
-          return new Response('Image not found', { status: 404 });
-        }
-        
-        return new Response(object.body, {
-          headers: {
-            'Content-Type': object.httpMetadata?.contentType || 'image/png',
-            'Cache-Control': 'public, max-age=31536000'
-          }
-        });
-        
-      } catch (error) {
-        console.error('Image serve error:', error);
-        return new Response('Error: ' + error.message, { status: 500 });
-      }
+      return servePublicImage(request, env, url);
     }
     
     // Fall back to static assets
@@ -152,6 +127,46 @@ export default {
 };
 
 // ============================================
+// IMAGE FILES (R2)
+// ============================================
+
+// Serve an image file only while the image is public (src/lib/visibility.js).
+// Hidden, deleted or taken-down images answer 404, the same as a missing file,
+// so a takedown also stops direct links. Admin pages read every image through
+// /api/admin/files/ instead.
+async function servePublicImage(request, env, url) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+  }
+  // /images/abc.png, or /cdn-cgi/image/format=webp/images/abc.png (Image Resizing)
+  const match = url.pathname.match(/\/(images\/[^/]+)$/);
+  const key = match ? match[1] : null;
+  const notFound = () => new Response('Image not found', {
+    status: 404,
+    headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'public, max-age=60' },
+  });
+  if (!isImageKey(key)) return notFound();
+
+  try {
+    if (!(await isImagePublic(env, key))) return notFound();
+    const object = await env.IMAGES.get(key);
+    if (!object) return notFound();
+    const type = object.httpMetadata?.contentType || '';
+    return new Response(object.body, {
+      headers: {
+        'Content-Type': /^image\/(jpeg|png|gif|webp|avif)$/.test(type) ? type : 'application/octet-stream',
+        'X-Content-Type-Options': 'nosniff',
+        // A day, not a year: after a takedown, browsers re-check within a day
+        'Cache-Control': 'public, max-age=86400'
+      }
+    });
+  } catch (error) {
+    console.error('Image serve error:', error);
+    return new Response('Error loading image', { status: 500, headers: { 'Content-Type': 'text/plain' } });
+  }
+}
+
+// ============================================
 // FAST IMAGES LIST FROM KV
 // ============================================
 
@@ -170,8 +185,9 @@ async function getImagesList(env) {
     }
     
     console.log('KV cache miss - falling back to D1');
+    // Same takedown filters as the KV sync (hidden tags and artists excluded)
     const results = await env.DB.prepare(`
-      SELECT filename FROM images WHERE status = 'active'
+      SELECT i.filename FROM ${PUBLIC_IMAGE_FROM} WHERE ${PUBLIC_IMAGE_WHERE}
     `).all();
 
     const filenames = results.results.map(r => r.filename);
@@ -253,9 +269,16 @@ async function handleAPI(request, env, url) {
   }
 }
 
+// limit in 1..100, offset >= 0; anything else (negative, text) falls back to the default
+export function pageParams(params, defaultLimit) {
+  const toInt = (v) => (/^\d{1,6}$/.test(v ?? '') ? Number(v) : null);
+  const limit = Math.min(Math.max(toInt(params.get('limit')) ?? defaultLimit, 1), 100);
+  const offset = toInt(params.get('offset')) ?? 0;
+  return { limit, offset };
+}
+
 async function getImages(env, params, corsHeaders) {
-  const limit = Math.min(parseInt(params.get('limit') || '20'), 100);
-  const offset = parseInt(params.get('offset') || '0');
+  const { limit, offset } = pageParams(params, 20);
 
   try {
     const results = await env.DB.prepare(`
@@ -359,8 +382,7 @@ async function getStats(env, corsHeaders) {
 async function getPublicArtists(env, searchParams, corsHeaders) {
   try {
     const featured = searchParams.get('featured');
-    const limit = Math.min(parseInt(searchParams.get('limit')) || 50, 100);
-    const offset = parseInt(searchParams.get('offset')) || 0;
+    const { limit, offset } = pageParams(searchParams, 50);
 
     let query = `
       SELECT 
@@ -383,8 +405,10 @@ async function getPublicArtists(env, searchParams, corsHeaders) {
     `;
 
     const params = [];
+    // Hidden or deleted artists are not public
+    query += ` WHERE a.status = 'active'`;
     if (featured === 'true') {
-      query += ' WHERE a.featured = 1';
+      query += ' AND a.featured = 1';
     }
 
     query += `
@@ -438,7 +462,7 @@ async function getPublicArtist(env, artistId, corsHeaders) {
       FROM artists a
       LEFT JOIN credits c ON a.id = c.artist_id
       LEFT JOIN images i ON c.id = i.credit_id AND i.status = 'active'
-      WHERE a.id = ?
+      WHERE a.id = ? AND a.status = 'active'
       GROUP BY a.id
     `).bind(artistId).first();
 
@@ -454,20 +478,19 @@ async function getPublicArtist(env, artistId, corsHeaders) {
       SELECT t.id, t.name, t.display_name
       FROM artist_tags at
       JOIN tags t ON at.tag_id = t.id
-      WHERE at.artist_id = ?
+      WHERE at.artist_id = ? AND t.status = 'active'
     `).bind(artistId).all();
 
-    // Get sample images
+    // Get sample images (only ones that are public: no hidden tags)
     const images = await env.DB.prepare(`
-      SELECT 
+      SELECT
         i.id,
         i.filename,
         i.alt_text,
         i.width,
         i.height
-      FROM images i
-      JOIN credits c ON i.credit_id = c.id
-      WHERE c.artist_id = ? AND i.status = 'active'
+      FROM ${PUBLIC_IMAGE_FROM}
+      WHERE c.artist_id = ? AND ${PUBLIC_IMAGE_WHERE}
       ORDER BY i.created_at DESC
       LIMIT 12
     `).bind(artistId).all();
@@ -512,12 +535,12 @@ async function serveMainPage(env) {
     if (initialImageData?.urls?.optimized) {
       // Use responsive preload with imagesrcset for better performance
       // sizes reflects actual viewport usage: 95vw on mobile, 90vw tablet, 85vw desktop (with max-width constraints)
-      preloadLink = `<link rel="preload" as="image" href="${initialImageData.urls.optimized}" imagesrcset="${initialImageData.urls.mobile} 640w, ${initialImageData.urls.tablet} 1024w, ${initialImageData.urls.desktop} 1920w" imagesizes="(max-width: 768px) 95vw, (max-width: 1200px) 90vw, 85vw" fetchpriority="high">`;
+      preloadLink = `<link rel="preload" as="image" href="${escapeHtml(initialImageData.urls.optimized)}" imagesrcset="${escapeHtml(initialImageData.urls.mobile)} 640w, ${escapeHtml(initialImageData.urls.tablet)} 1024w, ${escapeHtml(initialImageData.urls.desktop)} 1920w" imagesizes="(max-width: 768px) 95vw, (max-width: 1200px) 90vw, 85vw" fetchpriority="high">`;
     } else if (initialImageData?.filename) {
       const imagePath = initialImageData.filename.startsWith('images/')
         ? `/${initialImageData.filename}`
         : `/images/${initialImageData.filename}`;
-      preloadLink = `<link rel="preload" as="image" href="${imagePath}" fetchpriority="high">`;
+      preloadLink = `<link rel="preload" as="image" href="${escapeHtml(imagePath)}" fetchpriority="high">`;
     }
   } catch (error) {
     console.error('SSR image fetch failed, will fallback to client-side:', error);
@@ -1094,7 +1117,7 @@ async function serveMainPage(env) {
             : ''
         }>
           <div class="loading" aria-live="polite">Loading...</div>
-          <img id="randomImage" alt="${initialImageData?.alt_text || ''}" loading="eager" fetchpriority="high" ${
+          <img id="randomImage" alt="${escapeHtml(initialImageData?.alt_text || '')}" loading="eager" fetchpriority="high" ${
             initialImageData?.width && initialImageData?.height
               ? `width="${initialImageData.width}" height="${initialImageData.height}"`
               : ''
@@ -1151,11 +1174,21 @@ async function serveMainPage(env) {
         // SSR data - image info embedded at render time for instant display (better LCP)
         const INITIAL_IMAGE_DATA = ${initialImageData ? JSON.stringify(initialImageData).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') : 'null'};
         
-        // HTML escape utility for security
+        // HTML escape utility for security. Quotes too: values also go into attributes.
         function escapeHtml(text) {
-          const div = document.createElement('div');
-          div.textContent = text;
-          return div.innerHTML;
+          return String(text == null ? '' : text)
+            .split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;')
+            .split('"').join('&quot;').split("'").join('&#39;');
+        }
+
+        // Only http(s) links from the database become links (no javascript: or data:)
+        function safeUrl(url) {
+          try {
+            const parsed = new URL(String(url));
+            return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : null;
+          } catch (e) {
+            return null;
+          }
         }
 
         // Format file size
@@ -1241,8 +1274,8 @@ async function serveMainPage(env) {
             content.push(\`<div class="metadata-item">
               <span class="metadata-label">Credit</span>
               <span class="metadata-value">\${
-                data.credit_url
-                  ? \`<a href="\${escapeHtml(data.credit_url)}" target="_blank" rel="noopener noreferrer">\${escapeHtml(data.credit_name)}</a>\`
+                safeUrl(data.credit_url)
+                  ? \`<a href="\${escapeHtml(safeUrl(data.credit_url))}" target="_blank" rel="noopener noreferrer">\${escapeHtml(data.credit_name)}</a>\`
                   : escapeHtml(data.credit_name)
               }</span>
             </div>\`);
@@ -1510,16 +1543,16 @@ async function serveMainPage(env) {
               // Build profile links
               const profileLinks = [];
               
-              if (creator.artist_website) {
-                profileLinks.push(\`<a href="\${escapeHtml(creator.artist_website)}" target="_blank" rel="noopener noreferrer">Website</a>\`);
+              if (safeUrl(creator.artist_website)) {
+                profileLinks.push(\`<a href="\${escapeHtml(safeUrl(creator.artist_website))}" target="_blank" rel="noopener noreferrer">Website</a>\`);
               }
               
               if (creator.artist_twitter) {
-                profileLinks.push(\`<a href="https://twitter.com/\${escapeHtml(creator.artist_twitter)}" target="_blank" rel="noopener noreferrer">Twitter</a>\`);
+                profileLinks.push(\`<a href="https://twitter.com/\${escapeHtml(encodeURIComponent(creator.artist_twitter))}" target="_blank" rel="noopener noreferrer">Twitter</a>\`);
               }
               
               if (creator.artist_instagram) {
-                profileLinks.push(\`<a href="https://instagram.com/\${escapeHtml(creator.artist_instagram)}" target="_blank" rel="noopener noreferrer">Instagram</a>\`);
+                profileLinks.push(\`<a href="https://instagram.com/\${escapeHtml(encodeURIComponent(creator.artist_instagram))}" target="_blank" rel="noopener noreferrer">Instagram</a>\`);
               }
               
               // Display profile links if available
@@ -1538,14 +1571,14 @@ async function serveMainPage(env) {
                 const displayName = escapeHtml(creator.artist_display_name || creator.artist_name);
                 const links = [];
                 
-                if (creator.artist_website) {
-                  links.push(\`<a href="\${escapeHtml(creator.artist_website)}" target="_blank" rel="noopener noreferrer">Website</a>\`);
+                if (safeUrl(creator.artist_website)) {
+                  links.push(\`<a href="\${escapeHtml(safeUrl(creator.artist_website))}" target="_blank" rel="noopener noreferrer">Website</a>\`);
                 }
                 if (creator.artist_twitter) {
-                  links.push(\`<a href="https://twitter.com/\${escapeHtml(creator.artist_twitter)}" target="_blank" rel="noopener noreferrer">Twitter</a>\`);
+                  links.push(\`<a href="https://twitter.com/\${escapeHtml(encodeURIComponent(creator.artist_twitter))}" target="_blank" rel="noopener noreferrer">Twitter</a>\`);
                 }
                 if (creator.artist_instagram) {
-                  links.push(\`<a href="https://instagram.com/\${escapeHtml(creator.artist_instagram)}" target="_blank" rel="noopener noreferrer">Instagram</a>\`);
+                  links.push(\`<a href="https://instagram.com/\${escapeHtml(encodeURIComponent(creator.artist_instagram))}" target="_blank" rel="noopener noreferrer">Instagram</a>\`);
                 }
                 
                 if (links.length > 0) {
