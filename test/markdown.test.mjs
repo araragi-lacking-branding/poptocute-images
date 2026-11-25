@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  escapeHtml, extractTagRefs, isValidSlug, parseTagRef, plainSummary, renderMarkdown, slugify,
+  escapeHtml, extractTagRefs, isValidSlug, parseTagRef, plainSummary, renderMarkdown, slugify, stripControlChars,
 } from '../src/lib/markdown.js';
 
 const resolveTag = (ref) => (ref.name === 'studio-shaft' && ref.category !== 'source'
@@ -28,6 +28,61 @@ test('only http(s), site-relative and #anchor links become links', () => {
   assert.match(renderMarkdown('[a](https://example.com/?a=1&b=2)'), /<a href="https:\/\/example\.com\/\?a=1&amp;b=2" rel="noopener noreferrer">a<\/a>/);
   assert.match(renderMarkdown('[home](/)'), /<a href="\/">home<\/a>/);
   assert.match(renderMarkdown('[top](#top)'), /<a href="#top">top<\/a>/);
+});
+
+test('backslash URLs that browsers treat as //host are rejected', () => {
+  for (const bad of ['/\\evil.example', '/\\/evil.example', 'https://ok.example\\@evil.example']) {
+    const html = renderMarkdown(`[x](${bad})`);
+    assert.ok(!html.includes('<a'), `${bad} -> ${html}`);
+  }
+});
+
+test('control characters are stripped (they would break the Atom feed)', () => {
+  assert.equal(stripControlChars('a\u0001b\u000Bc\u0000d\te\nf'), 'abcd\te\nf');
+  // eslint-disable-next-line no-control-regex
+  assert.ok(!/[\u0000-\u0008]/.test(renderMarkdown('x\u0001y `\u0000`')));
+});
+
+test('fragments inside link labels and alt text are restored, not leaked', () => {
+  const link = renderMarkdown('[see `code` and [[studio-shaft]]](/a)', { resolveTag });
+  assert.ok(!link.includes('\u0000'), link);
+  assert.match(link, /<a href="\/a">see <code>code<\/code> and Studio SHAFT<\/a>/);
+  const img = renderMarkdown('![a `b` [[studio-shaft]]](/images/x.jpg)', { resolveTag });
+  assert.match(img, /alt="a b Studio SHAFT"/);
+});
+
+test('deeply nested quotes render instead of overflowing the stack', () => {
+  const html = renderMarkdown('>'.repeat(8000) + ' deep');
+  assert.equal((html.match(/<blockquote>/g) || []).length, 3);
+  assert.ok(html.includes('deep'));
+});
+
+// Bodies built to make backtracking regexes slow (audit A measured 3.6 s to 24 s
+// on the first version). Each must render in well under a second.
+test('hostile bodies render quickly', () => {
+  const n = 100_000;
+  const cases = {
+    'heading spaces': '# ' + ' '.repeat(n) + 'x',
+    'heading spaces then hashes': '# a' + ' '.repeat(n / 2) + '#'.repeat(10) + 'b',
+    'image openers': '!['.repeat(n / 2),
+    'unclosed links': '[a]('.repeat(n / 4),
+    'link with long url': '[a](' + 'b'.repeat(n),
+    'tag openers': '[['.repeat(n / 2),
+    'brackets': '['.repeat(n),
+    'backticks': '`'.repeat(n),
+    'bold openers': '**a'.repeat(n / 3),
+    'italic openers': '*a '.repeat(n / 3),
+    'blank-ish lines': '\n \n'.repeat(n / 3),
+    'dashes': '-'.repeat(n) + 'x',
+  };
+  for (const [name, body] of Object.entries(cases)) {
+    const started = performance.now();
+    renderMarkdown(body, { resolveTag });
+    plainSummary(body);
+    extractTagRefs(body);
+    const ms = performance.now() - started;
+    assert.ok(ms < 1000, `${name}: ${ms.toFixed(0)} ms`);
+  }
 });
 
 test('a link target cannot break out of its attribute', () => {

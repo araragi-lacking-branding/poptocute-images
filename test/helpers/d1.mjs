@@ -15,6 +15,8 @@ class Statement {
     this.params = params;
   }
   bind(...params) {
+    // D1 rejects statements with more than 100 bound parameters
+    if (params.length > 100) throw new Error(`D1_ERROR: too many SQL variables (${params.length})`);
     for (const p of params) {
       if (p === undefined) throw new Error('D1_TYPE_ERROR: Type \'undefined\' not supported for value \'undefined\'');
     }

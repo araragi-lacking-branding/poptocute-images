@@ -6,7 +6,7 @@
 //   /blog/feed.xml              Atom feed of the latest posts
 // The look follows the main page: white, Mincho serif, the same tag pills.
 
-import { escapeHtml, extractTagRefs, plainSummary, renderMarkdown } from '../lib/markdown.js';
+import { escapeHtml, extractTagRefs, plainSummary, renderMarkdown, stripControlChars } from '../lib/markdown.js';
 import {
   getPublicTag, getPublishedPost, isMissingTable, listPublishedPosts, refKey, resolveTagRefs,
 } from './data.js';
@@ -72,7 +72,7 @@ const STYLES = `
   footer a { color: #999; text-decoration: none; }
 `;
 
-function page({ title, description = '', body, origin = '', status = 200, cache = 'public, max-age=300' }) {
+function page({ title, description = '', body, origin = '', status = 200, cache = 'public, max-age=60' }) {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -123,10 +123,15 @@ function postList(posts) {
   }).join('')}</ul>`;
 }
 
-async function renderBody(env, body) {
-  const refs = extractTagRefs(body);
-  const resolved = refs.length ? await resolveTagRefs(env, refs) : new Map();
-  return renderMarkdown(body, { resolveTag: (ref) => resolved.get(refKey(ref)) ?? null });
+// Look up every [[tag]] in a set of bodies with one query
+async function resolveAll(env, bodies) {
+  const refs = bodies.flatMap((body) => extractTagRefs(body));
+  return refs.length ? resolveTagRefs(env, refs) : new Map();
+}
+
+async function renderBody(env, body, resolved = null) {
+  const map = resolved ?? await resolveAll(env, [body]);
+  return renderMarkdown(body, { resolveTag: (ref) => map.get(refKey(ref)) ?? null });
 }
 
 function notFound(origin) {
@@ -164,7 +169,7 @@ export async function renderPostPage(env, post, { origin = '', preview = false }
   return page({
     title: `${post.title} · ${SITE_TITLE}`, origin,
     description: post.summary || plainSummary(post.body, 160),
-    cache: preview ? 'no-store' : 'public, max-age=300',
+    cache: preview ? 'no-store' : 'public, max-age=60',
     body: `${banner}<h1>${escapeHtml(post.title)}</h1>
       <p class="meta">${date ? `<time datetime="${escapeHtml(date)}">${escapeHtml(date)}</time>` : 'not published'}</p>
       ${tagPills(post.tags)}
@@ -193,8 +198,10 @@ async function tagPage(env, url, category, name) {
   });
 }
 
+// Escaped, and without the control characters XML 1.0 forbids (validation
+// already drops them on save; this covers rows written before that)
 function xmlEscape(text) {
-  return escapeHtml(text);
+  return escapeHtml(stripControlChars(text));
 }
 
 function atomDate(sqlDate) {
@@ -202,11 +209,12 @@ function atomDate(sqlDate) {
 }
 
 async function feed(env, url) {
-  const { posts } = await listPublishedPosts(env, { limit: 20 });
+  const { posts } = await listPublishedPosts(env, { limit: 20, fullBody: true });
   const origin = url.origin;
+  const resolved = await resolveAll(env, posts.map((p) => p.body));
   const entries = [];
   for (const p of posts) {
-    const html = await renderBody(env, p.body);
+    const html = await renderBody(env, p.body, resolved);
     // Feed readers need absolute links
     const absolute = html.replace(/(href|src)="\//g, `$1="${origin}/`);
     entries.push(`  <entry>
@@ -232,7 +240,7 @@ async function feed(env, url) {
 ${entries.join('\n')}
 </feed>`;
   return new Response(xml, {
-    headers: { 'Content-Type': 'application/atom+xml; charset=UTF-8', 'Cache-Control': 'public, max-age=1800', 'X-Content-Type-Options': 'nosniff' },
+    headers: { 'Content-Type': 'application/atom+xml; charset=UTF-8', 'Cache-Control': 'public, max-age=600', 'X-Content-Type-Options': 'nosniff' },
   });
 }
 
@@ -242,7 +250,10 @@ export async function handleBlogRequest(request, env, url) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   }
-  const path = url.pathname.replace(/\/+$/, '') || '/blog';
+  // Trim trailing slashes with a loop (a /\/+$/ regex is quadratic on long slash runs)
+  let end = url.pathname.length;
+  while (end > 0 && url.pathname[end - 1] === '/') end--;
+  const path = url.pathname.slice(0, end) || '/blog';
   try {
     if (path === '/blog') return await listPage(env, url);
     if (path === '/blog/feed.xml') return await feed(env, url);

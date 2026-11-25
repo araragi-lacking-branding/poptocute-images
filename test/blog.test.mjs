@@ -231,6 +231,43 @@ test('routing details: methods, trailing slash, main page link', async () => {
   assert.match(main, /<a href="\/blog">blog<\/a>/);
 });
 
+test('audit fixes: validation, feed cost and XML, bind limit, slash paths', async () => {
+  const { env, adminEnv } = makeEnv();
+
+  // Non-string fields are errors, not silently ignored
+  assert.equal((await admin(adminEnv, 'POST', '/posts', { title: 'x', slug: 5 })).status, 400);
+  assert.equal((await admin(adminEnv, 'POST', '/posts', { title: 'x', summary: ['a'] })).status, 400);
+  assert.equal((await admin(adminEnv, 'POST', '/posts', { title: 7 })).status, 400);
+
+  // Control characters are dropped on save, so the feed stays valid XML
+  const ctl = await admin(adminEnv, 'POST', '/posts', { title: 'Bad\u0001 title\u000B', body: 'x\u0000y', status: 'published' });
+  assert.equal(ctl.data.post.title, 'Bad title');
+  assert.equal(ctl.data.post.body, 'xy');
+
+  // Over 100 posts: the admin list must stay under D1's 100-parameter limit
+  for (let i = 0; i < 120; i++) {
+    await admin(adminEnv, 'POST', '/posts', { title: `Bulk ${i}`, body: `[[seifuku]] ${i}`, status: 'published', tag_ids: [1] });
+  }
+  const all = await admin(adminEnv, 'GET', '/posts');
+  assert.equal(all.status, 200);
+  assert.equal(all.data.posts.length, 121);
+  assert.ok(all.data.posts.every((p) => p.status !== 'published' || p.tags.length <= 1));
+
+  // The feed resolves every post's [[tags]] in one query, not one per post
+  let queries = 0;
+  const counting = { ...env, DB: { ...env.DB, prepare: (sql) => { queries++; return env.DB.prepare(sql); } } };
+  const feed = await get(counting, '/blog/feed.xml');
+  assert.equal(feed.res.status, 200);
+  assert.ok(queries <= 4, `feed used ${queries} queries`);
+  // eslint-disable-next-line no-control-regex
+  assert.ok(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(feed.text), 'feed must be valid XML');
+
+  // A long run of slashes is cheap to route
+  const started = performance.now();
+  assert.equal((await get(env, '/blog/' + '/'.repeat(16000) + 'x')).res.status, 404);
+  assert.ok(performance.now() - started < 200);
+});
+
 // The editor's browser code is serialised with Function.toString(). Wrangler's
 // bundler (esbuild keepNames) inserts __name(...) calls into it, which would throw
 // in the browser without the shim. Bundle the same way and run the script against
