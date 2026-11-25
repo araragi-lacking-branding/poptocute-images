@@ -24,7 +24,7 @@ However, I do intend this to be a critique, in the formal sense. Taking a hypoth
 
 # *funding, cost, and use disclosures / ethics*
 - There is absolutely no outside money coming into this project. There are no ads or monetization. There is absolutely no plan to add anything like that. Minimizing tracking is also crucial.
-- Observability via Cloudflare is turned on. We may explore site tags, SEO, and such in the future, but that's not a goal now, and should never be used for monetization on this site.
+- We turned off Cloudflare observability. They'll still probably track you, but not as much. We're trying to reduce any non-essential tracking.
 - If that changes, it will be disclosed immediately. It is against the ethos of the project however, and the site concept is purposefully pretty meaningless in the modern internet to avoid abuse.
 - If you see a change or anything not aligning to the above, please let me know - lambda@cutetopop.com. Given the nature of the build concept, it is very possible for items to be injected or added unknowingly by the model.
 - Costs should be minimal (currently only the domain registration), primarily using Cloudflare and GitHub for all services. I'll update services as they change, but everything currently is running off of Cloudflare D1 / R2 / KV / Workers and right here.
@@ -61,6 +61,9 @@ A small random-image site at **https://cutetopop.com**, with tagging and artist 
 ## Security
 
 - **Admin is locked twice.** Cloudflare Access protects `/admin` and `/api/admin/*` at the edge. The Worker also verifies the Access login token itself (`src/lib/access.js`) and returns 403 without a valid one. Even if a hostname or route slips past Access, admin stays closed.
+- **Admin writes must come from the admin pages.** Any admin request that changes data and comes from another website is refused (`src/lib/request-guards.js`), so a hostile page can't act through a logged-in admin's browser. Admin pages also can't be framed by other sites.
+- **Takedowns apply everywhere.** An image is public only while it is active, its artist is active and none of its tags is hidden (`src/lib/visibility.js`). The random image, the image list, artist pages and the image files themselves (`/images/...`) all use that one rule, so hiding an image also stops its direct link. Admin pages read images through `/api/admin/files/`.
+- **Minimal logging.** The Worker keeps only its own error and status messages, which hold no visitor details. Cloudflare's automatic per-request logs and traces are off (`wrangler.toml`), because they store each visitor's IP address, browser, city, postcode and coordinates. The site stores no visitor IPs anywhere (the unused `feedback` IP columns were dropped in `migrations/0006`). Rate limiting is done by a Cloudflare rule at the edge, which keeps nothing for the site.
 - **One public hostname.** `cutetopop.com` is the only way in. `www.cutetopop.com` redirects to it, and `workers.dev` and preview URLs are off (`wrangler.toml`).
 - **No secrets in the repo.** The IDs in `wrangler.toml` (database, bucket, KV namespace, Access team and app) are public identifiers. Local-only settings go in `.dev.vars`, which is gitignored.
 - **GitHub:** secret scanning with push protection, Dependabot alerts and security updates, and a protected `main` branch (pull requests and passing CI required, no force-pushes).

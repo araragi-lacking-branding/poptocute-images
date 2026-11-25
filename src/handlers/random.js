@@ -3,6 +3,7 @@
 // Goal: Extract from main index.js for better code organization and maintainability
 
 import { syncKVCache } from '../admin/sync.js';
+import { PUBLIC_IMAGE_FROM, PUBLIC_IMAGE_WHERE } from '../lib/visibility.js';
 
 async function getRandomImage(env, corsHeaders) {
   try {
@@ -17,8 +18,10 @@ async function getRandomImage(env, corsHeaders) {
       console.warn('KV cache miss - triggering sync');
 
       // Immediate fallback to DB query (don't block request)
+      // Count with the same filters as the random pick below, or the offset can
+      // land past the end
       const countResult = await env.DB.prepare(`
-        SELECT COUNT(*) as count FROM images WHERE status = 'active'
+        SELECT COUNT(*) as count FROM ${PUBLIC_IMAGE_FROM} WHERE ${PUBLIC_IMAGE_WHERE}
       `).first();
       count = countResult.count;
 
@@ -44,9 +47,6 @@ async function getRandomImage(env, corsHeaders) {
         i.title,
         i.source,
         i.license,
-        i.permissions,
-        i.notes,
-        i.file_hash,
         i.file_size,
         i.width,
         i.height,

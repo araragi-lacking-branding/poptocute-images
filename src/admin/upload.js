@@ -74,7 +74,9 @@ export async function handleUpload(request, env) {
     console.log(`Metadata extracted: ${metadata.width}x${metadata.height}, ${metadata.format}, ${metadata.color_space}`);
 
     // Generate filename with hash and original extension
-    const ext = file.name.split('.').pop().toLowerCase();
+    // Extension from the (already allow-listed) type, never from the uploader's
+    // file name, which could hold slashes or quotes
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif' }[file.type];
     const filename = `images/${shortHash}.${ext}`;
 
     // Upload to R2
