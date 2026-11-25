@@ -24,6 +24,7 @@ Work so that a person can follow it later: explain what you're changing and why,
 - `src/blog/pages.js`, `src/blog/data.js`: the public blog (`/blog`, server-rendered, no client JS, strict CSP) and its D1 queries. Public reads return only published posts and active tags.
 - `src/admin/blog.js`: `/api/admin/posts` and the `/admin/blog` editor. The editor's browser code is a real function serialised with `toString()`; keep the `__name` shim in its `<script>` (Wrangler's bundler inserts `__name(...)` calls).
 - `src/lib/markdown.js`: the blog's Markdown subset. It escapes everything first and allows only http(s)/relative links and `/images/` images. Keep it that way: posts must not be able to add scripts or third-party requests.
+- `src/lib/fonts.js`, `public/fonts/`: the site font (BIZ UDMincho, SIL OFL), self-hosted so visitors never contact a font provider. Use `MINCHO_STACK` and `FONT_HEAD` on any page that shows site text; pages with a CSP need `style-src 'self'` and `font-src 'self'`. Regenerate with `node scripts/self-host-font.mjs` (new version = new directory, so the one-year cache in `public/_headers` stays safe). Don't link Google Fonts directly.
 - `openapi-schema.yaml`: the API contract. Keep it in sync with endpoint changes.
 - `wrangler.toml`: bindings, routes, cron, and the Access identifiers (`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`).
 - `test/`: offline `node:test` suites. They need no network or Cloudflare account.

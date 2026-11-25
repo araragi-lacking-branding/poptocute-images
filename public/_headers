@@ -1,0 +1,6 @@
+# Workers static assets: response headers for files in public/.
+# Font files never change in place (a new font version gets a new directory and CSS
+# file name, see scripts/self-host-font.mjs), so browsers may keep them for a year.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+  X-Content-Type-Options: nosniff
