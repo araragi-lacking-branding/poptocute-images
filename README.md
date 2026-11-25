@@ -62,6 +62,8 @@ A small random-image site at **https://cutetopop.com**, with tagging and artist 
 ## Security
 
 - **Admin is locked twice.** Cloudflare Access protects `/admin` and `/api/admin/*` at the edge. The Worker also verifies the Access login token itself (`src/lib/access.js`) and returns 403 without a valid one. Even if a hostname or route slips past Access, admin stays closed.
+- **Admin writes must come from the admin pages.** Any admin request that changes data and comes from another website is refused (`src/lib/request-guards.js`), so a hostile page can't act through a logged-in admin's browser. Admin pages also can't be framed by other sites.
+- **Takedowns apply everywhere.** An image is public only while it is active, its artist is active and none of its tags is hidden (`src/lib/visibility.js`). The random image, the image list, artist pages and the image files themselves (`/images/...`) all use that one rule, so hiding an image also stops its direct link. Admin pages read images through `/api/admin/files/`.
 - **One public hostname.** `cutetopop.com` is the only way in. `www.cutetopop.com` redirects to it, and `workers.dev` and preview URLs are off (`wrangler.toml`).
 - **No secrets in the repo.** The IDs in `wrangler.toml` (database, bucket, KV namespace, Access team and app) are public identifiers. Local-only settings go in `.dev.vars`, which is gitignored.
 - **GitHub:** secret scanning with push protection, Dependabot alerts and security updates, and a protected `main` branch (pull requests and passing CI required, no force-pushes).

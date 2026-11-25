@@ -1014,13 +1014,20 @@ export function generateAdminUI(activeView = 'images') {
           }
         }
 
+        // Escape a value for HTML text and quoted attributes
+        function esc(value) {
+          return String(value == null ? '' : value)
+            .split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;')
+            .split('"').join('&quot;').split("'").join('&#39;');
+        }
+
         function renderTagLists() {
           ['content', 'character', 'creator', 'source'].forEach(category => {
             const container = document.getElementById(\`tags-\${category}\`);
             const tags = allTags[category] || [];
             
             container.innerHTML = tags.map(tag => 
-              \`<span class="tag" data-tag-id="\${tag.id}" onclick="toggleTag(\${tag.id}, '\${category}')">\${tag.display_name || tag.name}</span>\`
+              \`<span class="tag" data-tag-id="\${tag.id}" onclick="toggleTag(\${tag.id}, '\${category}')">\${esc(tag.display_name || tag.name)}</span>\`
             ).join('');
           });
           
@@ -1166,8 +1173,8 @@ export function generateAdminUI(activeView = 'images') {
           }
           
           dropdown.innerHTML = matches.map(tag => \`
-            <div class="autocomplete-item" onclick="selectExistingTag('\${category}', \${tag.id}, '\${(tag.display_name || tag.name).replace(/'/g, "\\\\'")}')">
-              \${tag.display_name || tag.name}
+            <div class="autocomplete-item" onclick="selectExistingTag('\${category}', \${tag.id}, \${esc(JSON.stringify(tag.display_name || tag.name))})">
+              \${esc(tag.display_name || tag.name)}
             </div>
           \`).join('');
           
@@ -1225,7 +1232,7 @@ export function generateAdminUI(activeView = 'images') {
             const response = await fetch(\`/api/admin/images/\${currentImageId}\`);
             const data = await response.json();
             
-            document.getElementById('current-image').src = '/' + data.filename;
+            document.getElementById('current-image').src = '/api/admin/files/' + data.filename;
             document.getElementById('info-image-id').textContent = data.id;
             document.getElementById('info-filename').textContent = data.filename;
             document.getElementById('info-size').textContent = formatFileSize(data.file_size);
@@ -1585,10 +1592,10 @@ export function generateAdminUI(activeView = 'images') {
             <div class="artist-item \${selectedArtistId === artist.id ? 'selected' : ''}" onclick="selectArtist(\${artist.id})">
               <div class="artist-item-header">
                 \${artist.avatar_url ? 
-                  \`<img src="\${artist.avatar_url}" class="artist-avatar" alt="\${artist.display_name || artist.name}" />\` :
+                  \`<img src="\${esc(artist.avatar_url)}" class="artist-avatar" alt="\${esc(artist.display_name || artist.name)}" />\` :
                   \`<div class="artist-avatar"></div>\`
                 }
-                <span class="artist-name">\${artist.display_name || artist.name}</span>
+                <span class="artist-name">\${esc(artist.display_name || artist.name)}</span>
                 \${artist.verified ? '<span class="artist-badge">✓</span>' : ''}
                 \${artist.featured ? '<span class="artist-badge featured">⭐</span>' : ''}
               </div>
@@ -1626,54 +1633,54 @@ export function generateAdminUI(activeView = 'images') {
               <div class="form-row">
                 <div class="form-group">
                   <label>Internal Name *</label>
-                  <input type="text" id="artist-name" value="\${artist.name || ''}" required placeholder="lowercase-slug" />
+                  <input type="text" id="artist-name" value="\${esc(artist.name)}" required placeholder="lowercase-slug" />
                 </div>
                 <div class="form-group">
                   <label>Display Name *</label>
-                  <input type="text" id="artist-display-name" value="\${artist.display_name || ''}" required placeholder="Display Name" />
+                  <input type="text" id="artist-display-name" value="\${esc(artist.display_name)}" required placeholder="Display Name" />
                 </div>
               </div>
 
               <div class="form-group">
                 <label>Bio</label>
-                <textarea id="artist-bio" placeholder="Short bio about the artist...">\${artist.bio || ''}</textarea>
+                <textarea id="artist-bio" placeholder="Short bio about the artist...">\${esc(artist.bio)}</textarea>
               </div>
 
               <div class="form-group">
                 <label>Avatar URL</label>
-                <input type="url" id="artist-avatar" value="\${artist.avatar_url || ''}" placeholder="https://..." />
+                <input type="url" id="artist-avatar" value="\${esc(artist.avatar_url)}" placeholder="https://..." />
               </div>
 
               <div class="form-row">
                 <div class="form-group">
                   <label>Website</label>
-                  <input type="url" id="artist-website" value="\${artist.website_url || ''}" placeholder="https://..." />
+                  <input type="url" id="artist-website" value="\${esc(artist.website_url)}" placeholder="https://..." />
                 </div>
                 <div class="form-group">
                   <label>Twitter</label>
-                  <input type="text" id="artist-twitter" value="\${artist.twitter_handle || ''}" placeholder="@username" />
+                  <input type="text" id="artist-twitter" value="\${esc(artist.twitter_handle)}" placeholder="@username" />
                 </div>
               </div>
 
               <div class="form-row">
                 <div class="form-group">
                   <label>Pixiv ID</label>
-                  <input type="text" id="artist-pixiv" value="\${artist.pixiv_id || ''}" placeholder="12345678" />
+                  <input type="text" id="artist-pixiv" value="\${esc(artist.pixiv_id)}" placeholder="12345678" />
                 </div>
                 <div class="form-group">
                   <label>Instagram</label>
-                  <input type="text" id="artist-instagram" value="\${artist.instagram_handle || ''}" placeholder="@username" />
+                  <input type="text" id="artist-instagram" value="\${esc(artist.instagram_handle)}" placeholder="@username" />
                 </div>
               </div>
 
               <div class="form-row">
                 <div class="form-group">
                   <label>DeviantArt</label>
-                  <input type="text" id="artist-deviantart" value="\${artist.deviantart_username || ''}" placeholder="username" />
+                  <input type="text" id="artist-deviantart" value="\${esc(artist.deviantart_username)}" placeholder="username" />
                 </div>
                 <div class="form-group">
                   <label>ArtStation</label>
-                  <input type="text" id="artist-artstation" value="\${artist.artstation_username || ''}" placeholder="username" />
+                  <input type="text" id="artist-artstation" value="\${esc(artist.artstation_username)}" placeholder="username" />
                 </div>
               </div>
 
@@ -1693,7 +1700,7 @@ export function generateAdminUI(activeView = 'images') {
                 <div class="artist-tags-list" id="artist-tags-list">
                   \${(artist.tags || []).map(tag => \`
                     <span class="artist-tag">
-                      \${tag.display_name || tag.name}
+                      \${esc(tag.display_name || tag.name)}
                       <button type="button" onclick="unlinkTag(\${artist.id}, \${tag.id})">×</button>
                     </span>
                   \`).join('')}
@@ -1704,7 +1711,7 @@ export function generateAdminUI(activeView = 'images') {
                     \${allCreatorTags.filter(tag => 
                       !(artist.tags || []).some(t => t.id === tag.id)
                     ).map(tag => \`
-                      <option value="\${tag.id}">\${tag.display_name || tag.name}</option>
+                      <option value="\${tag.id}">\${esc(tag.display_name || tag.name)}</option>
                     \`).join('')}
                   </select>
                   <button type="button" onclick="linkTag(\${artist.id})">Link</button>
@@ -1715,7 +1722,7 @@ export function generateAdminUI(activeView = 'images') {
                 <h3>Images (\${images.length})</h3>
                 <div class="artist-images-grid">
                   \${images.map(img => \`
-                    <img src="/\${img.filename}" class="artist-image-thumb" alt="" title="\${img.filename}" />
+                    <img src="/api/admin/files/\${esc(img.filename)}" class="artist-image-thumb" alt="" title="\${esc(img.filename)}" />
                   \`).join('')}
                 </div>
               </div>

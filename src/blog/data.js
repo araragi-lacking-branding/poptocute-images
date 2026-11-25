@@ -5,6 +5,7 @@
 // deleting a tag (e.g. for a takedown) removes it from every blog page as well.
 
 import { isValidSlug, slugify, normalizeTagName, stripControlChars } from '../lib/markdown.js';
+import { PUBLIC_IMAGE_FROM, PUBLIC_IMAGE_WHERE } from '../lib/visibility.js';
 
 export const POST_STATUSES = ['draft', 'published', 'hidden'];
 export const LIMITS = { title: 200, summary: 500, body: 100_000, tags: 50, refs: 50 };
@@ -113,19 +114,12 @@ export async function getPublicTag(env, category, name) {
   `).bind(category, normalizeTagName(name)).first();
   if (!tag) return null;
 
+  // Count only public images (the site-wide rule in src/lib/visibility.js)
   const images = await env.DB.prepare(`
     SELECT COUNT(*) AS count
-    FROM image_tags it
-    JOIN images i ON i.id = it.image_id
-    LEFT JOIN credits c ON i.credit_id = c.id
-    LEFT JOIN artists a ON c.artist_id = a.id
-    WHERE it.tag_id = ?
-      AND i.status = 'active'
-      AND (a.id IS NULL OR a.status = 'active')
-      AND i.id NOT IN (
-        SELECT it2.image_id FROM image_tags it2 JOIN tags t2 ON t2.id = it2.tag_id
-        WHERE t2.status IN ('hidden', 'deleted')
-      )
+    FROM ${PUBLIC_IMAGE_FROM}
+    WHERE i.id IN (SELECT image_id FROM image_tags WHERE tag_id = ?)
+      AND ${PUBLIC_IMAGE_WHERE}
   `).bind(tag.id).first();
   tag.image_count = images?.count ?? 0;
 

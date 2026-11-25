@@ -32,6 +32,9 @@ Work so that a person can follow it later: explain what you're changing and why,
 ## Security rules
 - `/admin` and `/api/admin/*` are protected twice: by Cloudflare Access at the edge (on `cutetopop.com` only), and by the Worker's own JWT check. Never remove or weaken either one, and never add a code path that serves admin handlers without `verifyAccessRequest`.
 - The only public hostname is `cutetopop.com`. `www.cutetopop.com` redirects to it in the Worker, and `workers_dev` and `preview_urls` are off. Don't add routes, custom domains or subdomains without covering admin for them.
+- Admin writes (POST/PUT/PATCH/DELETE) are refused when they come from another origin (`src/lib/request-guards.js`, applied in `src/index.js` after the Access check). Keep that check in front of every admin handler, and keep `withAdminHeaders` on admin responses (no framing, no sniffing).
+- Public image rules live in `src/lib/visibility.js` (`PUBLIC_IMAGE_FROM` / `PUBLIC_IMAGE_WHERE`, `isImagePublic`). Every public path that lists or serves images must use them, so hiding an image, tag or artist removes it everywhere, including `/images/<file>`. Admin pages load images through `/api/admin/files/`.
+- Never build SQL from request values: bind them (`?`). Escape every database value written into HTML (`src/lib/html.js` on the server, `escapeHtml`/`esc` in page scripts), and only output http(s) links from stored URLs.
 - `ACCESS_DEV_BYPASS` belongs only in `.dev.vars` for local development. Never put it in `wrangler.toml` or production.
 - No secrets in the repo. Cloudflare bindings and the Access IDs in `wrangler.toml` are public identifiers.
 - Don't add external network calls or third-party services without saying so and documenting their configuration. The Worker's only outbound call is the Access certificates fetch.

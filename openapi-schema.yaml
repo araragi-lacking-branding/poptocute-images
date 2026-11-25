@@ -365,6 +365,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/admin/files/images/{file}:
+    get:
+      tags:
+        - admin
+      summary: Read any image file, hidden ones included
+      description: For the admin pages. The public /images/{file} route only serves images that are currently public (active, artist active, no hidden tags) and answers 404 otherwise.
+      operationId: getAdminImageFile
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{1,100}\.[A-Za-z0-9]{1,5}$'
+      responses:
+        '200':
+          description: The image bytes (Cache-Control private, no-store)
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No such file
+
   /api/admin/sync:
     post:
       tags:

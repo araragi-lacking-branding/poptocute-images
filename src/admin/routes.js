@@ -3,6 +3,7 @@
 
 import { generateAdminUI } from './ui.js';
 import { generateBlogAdminUI, handleBlogAdminAPI, handleBlogPreview } from './blog.js';
+import { isImageKey } from '../lib/visibility.js';
 import { handleSync, syncKVCache } from './sync.js';
 import { handleUpload } from './upload.js';
 import { handleMetadataBackfill, handleMetadataValidation } from './metadata-sync.js';
@@ -70,6 +71,19 @@ export async function handleAdminRequest(request, env, url) {
   return new Response('Not Found', { status: 404 });
 }
 
+async function serveAdminImageFile(env, key) {
+  const object = isImageKey(key) ? await env.IMAGES.get(key) : null;
+  if (!object) return new Response('Image not found', { status: 404, headers: { 'Content-Type': 'text/plain' } });
+  const type = object.httpMetadata?.contentType || '';
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': /^image\/(jpeg|png|gif|webp|avif)$/.test(type) ? type : 'application/octet-stream',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, no-store'
+    }
+  });
+}
+
 // Handle admin API endpoints
 async function handleAdminAPI(request, env, url) {
   const path = url.pathname.replace('/api/admin', '');
@@ -107,6 +121,12 @@ async function handleAdminAPI(request, env, url) {
     // /api/admin/posts[/:id] - blog posts (src/admin/blog.js)
     const blogResponse = await handleBlogAdminAPI(request, env, path, corsHeaders);
     if (blogResponse) return blogResponse;
+
+    // GET /api/admin/files/images/<file> - any image file, hidden ones included,
+    // for the admin pages (public /images/ only serves public images)
+    if (path.startsWith('/files/') && (method === 'GET' || method === 'HEAD')) {
+      return await serveAdminImageFile(env, path.slice('/files/'.length));
+    }
 
     // GET /api/admin/tags - Get all tags organized by category
     if (path === '/tags' && method === 'GET') {
@@ -469,6 +489,11 @@ async function getImageDetails(env, imageId, corsHeaders) {
 async function updateImageMetadata(request, env, imageId, corsHeaders) {
   const { tags, metadata } = await request.json();
 
+  // Tag ids must be positive integers: they go into SQL (as bound values below)
+  if (tags !== undefined && (!Array.isArray(tags) || tags.length > 200 || !tags.every((t) => Number.isInteger(t) && t > 0))) {
+    return new Response(JSON.stringify({ error: 'tags must be an array of tag ids' }), { status: 400, headers: corsHeaders });
+  }
+
   try {
     // Handle image metadata fields
     if (metadata) {
@@ -502,23 +527,20 @@ async function updateImageMetadata(request, env, imageId, corsHeaders) {
       const newTagIds = new Set(tags);
       
       // Remove tags that are no longer selected
+      // Add and remove in one batch (one transaction), every value bound, one
+      // statement per tag so no statement nears D1's 100-parameter limit
       const tagsToRemove = [...currentTagIds].filter(id => !newTagIds.has(id));
-      if (tagsToRemove.length > 0) {
-        const placeholders = tagsToRemove.map(() => '?').join(',');
-        await env.DB.prepare(`
-          DELETE FROM image_tags 
-          WHERE image_id = ? AND tag_id IN (${placeholders})
-        `).bind(imageId, ...tagsToRemove).run();
-      }
-      
-      // Add new tags that weren't previously set
       const tagsToAdd = [...newTagIds].filter(id => !currentTagIds.has(id));
-      if (tagsToAdd.length > 0) {
-        const values = tagsToAdd.map(tagId => `(${imageId}, ${tagId})`).join(',');
-        await env.DB.prepare(`
-          INSERT INTO image_tags (image_id, tag_id)
-          VALUES ${values}
-        `).run();
+      const statements = [
+        ...tagsToRemove.map(tagId => env.DB.prepare(
+          'DELETE FROM image_tags WHERE image_id = ? AND tag_id = ?'
+        ).bind(imageId, tagId)),
+        ...tagsToAdd.map(tagId => env.DB.prepare(
+          'INSERT OR IGNORE INTO image_tags (image_id, tag_id) SELECT ?, id FROM tags WHERE id = ?'
+        ).bind(imageId, tagId)),
+      ];
+      if (statements.length > 0) {
+        await env.DB.batch(statements);
       }
       
       // After updating tags, sync credits for this image if it has creator tags
