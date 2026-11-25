@@ -46,6 +46,7 @@ A small random-image site at **https://cutetopop.com**, with tagging and artist 
 - **What's live:** four test banners (the "silly watermark" images above), shown at random. Every other image was removed from the site and from Cloudflare storage in October 2026.
 - **Attribution data stays:** the tag, credit and artist records (46 tags, 22 credits, 12 artists) are kept for when attributed works replace the test images.
 - **Admin:** an image and artist management UI at `/admin`, for the maintainer only.
+- **Blog:** short posts at `/blog`, linked from the main page's footer. Posts are tagged with the same tags as the images, and `[[tag]]` in a post links to that tag's page. Written at `/admin/blog`.
 
 ## How it works
 
@@ -53,7 +54,7 @@ A small random-image site at **https://cutetopop.com**, with tagging and artist 
 |---|---|---|
 | Worker (`src/`) | Workers | Serves the page, the public API, the admin UI and images. Runs a daily 3 AM UTC maintenance job. |
 | Images | R2 bucket `cutetopop-images` | Image files under hash-based names (`images/<hash>.jpg`). Not stored in this repository. |
-| Metadata | D1 database `cutetopop-db` | Images, tags, credits, artists, feedback (9 tables, 5 views). |
+| Metadata | D1 database `cutetopop-db` | Images, tags, credits, artists, feedback, blog posts (11 tables, 5 views). |
 | Image list cache | KV namespace | The active image list, rebuilt from D1 by the daily job or `POST /api/admin/sync`. |
 | Resizing | Image Resizing | WebP conversion via `/cdn-cgi/image/...`. |
 | Admin login | Cloudflare Access (Zero Trust) | Email one-time PIN in front of `/admin` and `/api/admin/*`. |
@@ -79,7 +80,18 @@ A small random-image site at **https://cutetopop.com**, with tagging and artist 
 | `GET /images.json` | The active image list (served from KV) |
 | `GET /images/<file>` | An image file from R2 |
 
-**Admin** (Access login required): images (list, get, update, change status), tags (list, create, change status), artists (list, create, get, update, delete, change status, their images, link and unlink tags), upload, KV sync, and metadata backfill and validation. The admin UI pages are `/admin/images` and `/admin/artists`.
+**Blog** (public HTML pages, no JavaScript, no third-party requests):
+
+| Page | Shows |
+|---|---|
+| `/blog` | Published posts, newest first (`?page=2` for older) |
+| `/blog/<slug>` | One post |
+| `/blog/tag/<category>/<name>` | A tag from the main tag tables: its visible image count, the credited artist for creator tags, and the posts about it |
+| `/blog/feed.xml` | Atom feed of the latest 20 posts |
+
+Only published posts and active tags appear. Hiding a tag removes it from every blog page too.
+
+**Admin** (Access login required): images (list, get, update, change status), tags (list, create, change status), artists (list, create, get, update, delete, change status, their images, link and unlink tags), blog posts (list, create, get, update, delete), upload, KV sync, and metadata backfill and validation. The admin UI pages are `/admin/images`, `/admin/artists` and `/admin/blog` (with `/admin/blog/preview/<id>` for drafts).
 
 The full contract is in [openapi-schema.yaml](openapi-schema.yaml) (also used for Cloudflare API Shield; see [docs/api.md](docs/api.md)). Keep it in sync with endpoint changes.
 
@@ -142,8 +154,11 @@ node scripts/backup-d1.mjs --restore-local backups/d1/<file>.sql   # load a dump
 | `credits` | Attribution for an image's source |
 | `artists`, `artist_tags` | Artist profiles, linked to their `creator` tags |
 | `feedback` | Visitor submissions, kept separate from approved tags |
+| `posts`, `post_tags` | Blog posts (`draft`/`published`/`hidden`) and which tags each is about |
 
 Views: `v_images_active`, `v_image_tags_by_category`, `v_tag_stats`, `v_artist_profiles`, `v_feedback_pending`. The base schema is in `schema.sql`, and later changes are in `migrations/`.
+
+Migrations were applied by hand, so D1's migration log (`d1_migrations`) is empty and `wrangler d1 migrations apply` would try to re-run all of them. Apply a new one with `npx wrangler d1 execute cutetopop-db --local --file migrations/<file>.sql` (then `--remote` for production). `0005_add_blog.sql` is additive and safe to run twice; until it runs, `/blog` shows "No posts yet".
 
 ## Repository map
 
@@ -153,7 +168,9 @@ src/
   handlers/random.js         random image selection
   lib/access.js              Cloudflare Access token verification
   lib/metadata-extractor.js  image metadata parsing (uploads, backfills)
-  admin/                     admin UI (ui.js), API (routes.js), upload, KV sync, artists, metadata sync
+  lib/markdown.js            the blog's safe Markdown subset and [[tag]] references
+  blog/                      public blog pages and feed (pages.js), blog queries (data.js)
+  admin/                     admin UI (ui.js), API (routes.js), blog editor (blog.js), upload, KV sync, artists, metadata sync
   static/                    the page's CSS and browser JavaScript
 test/                        offline node:test suites (npm test)
 scripts/                     backup, KV sync, metadata backfill, and local test/monitoring helpers
