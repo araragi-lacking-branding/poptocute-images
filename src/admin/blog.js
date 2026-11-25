@@ -348,8 +348,10 @@ export function generateBlogAdminUI() {
     label { display: block; font-size: 12px; font-weight: 600; color: #666; margin: 14px 0 4px; }
     input[type=text], textarea, select { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font: inherit; font-size: 14px; background: #fff; }
     input:focus, textarea:focus, select:focus { outline: none; border-color: #4ecdc4; }
-    #title { font-family: "Heisei Mincho", "MS Mincho", "SimSun", serif; font-size: 20px; }
-    #body { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.6; min-height: 360px; resize: vertical; }
+    #title, #summary, #body { font-family: "Heisei Mincho", "MS Mincho", "SimSun", serif; }
+    #title { font-size: 20px; }
+    #summary { font-size: 15px; }
+    #body { font-size: 16px; line-height: 1.75; min-height: 360px; resize: vertical; }
     .row { display: grid; grid-template-columns: 1fr 160px; gap: 12px; }
     .hint { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.5; }
     .hint code { background: #f5f5f5; padding: 0 4px; border-radius: 3px; }
