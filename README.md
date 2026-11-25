@@ -24,7 +24,7 @@ However, I do intend this to be a critique, in the formal sense. Taking a hypoth
 
 # *funding, cost, and use disclosures / ethics*
 - There is absolutely no outside money coming into this project. There are no ads or monetization. There is absolutely no plan to add anything like that. Minimizing tracking is also crucial.
-- Observability via Cloudflare is turned on. We may explore site tags, SEO, and such in the future, but that's not a goal now, and should never be used for monetization on this site.
+- We turned off Cloudflare observability. They'll still probably track you, but not as much. We're trying to reduce any non-essential tracking.
 - If that changes, it will be disclosed immediately. It is against the ethos of the project however, and the site concept is purposefully pretty meaningless in the modern internet to avoid abuse.
 - If you see a change or anything not aligning to the above, please let me know - lambda@cutetopop.com. Given the nature of the build concept, it is very possible for items to be injected or added unknowingly by the model.
 - Costs should be minimal (currently only the domain registration), primarily using Cloudflare and GitHub for all services. I'll update services as they change, but everything currently is running off of Cloudflare D1 / R2 / KV / Workers and right here.
