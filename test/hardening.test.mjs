@@ -4,6 +4,7 @@
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
 import { createD1, PROD_SCHEMA } from './helpers/d1.mjs';
 
 const PROD = 'https://cutetopop.com';
@@ -228,6 +229,37 @@ test('admin page scripts still compile and escape what they render', () => {
     assert.equal(esc(`<img src=x onerror="a">'`), '&lt;img src=x onerror=&quot;a&quot;&gt;&#39;');
     assert.ok(html.includes("'/api/admin/files/' + data.filename"));
   }
+});
+
+// ---------- privacy ----------
+
+test('migration 0006 drops the visitor IP columns and keeps feedback working', () => {
+  const DB = createD1({ files: PROD_SCHEMA });
+  DB.raw.exec(`INSERT INTO images (id, filename) VALUES (1, 'images/a.png');
+    INSERT INTO feedback (image_id, type, data, submitter_ip, user_agent) VALUES (1, 'general', 'hi', '203.0.113.9', 'ua');`);
+  DB.raw.exec(readFileSync(new URL('../migrations/0006_drop_feedback_ip_columns.sql', import.meta.url), 'utf8'));
+  const columns = DB.raw.prepare('PRAGMA table_info(feedback)').all().map((c) => c.name);
+  assert.ok(!columns.includes('submitter_ip') && !columns.includes('user_agent'), columns.join(','));
+  assert.equal(DB.raw.prepare('SELECT data FROM feedback').get().data, 'hi', 'existing rows kept');
+  const pending = DB.raw.prepare('SELECT * FROM v_feedback_pending').all();
+  assert.equal(pending.length, 1);
+  assert.ok(!('submitter_ip' in pending[0]));
+  assert.equal(DB.raw.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'idx_feedback_ip'").get().n, 0);
+});
+
+test('the blocked bot is refused without logging its IP', async () => {
+  const { env } = makeEnv();
+  const logged = [];
+  console.log = (...a) => logged.push(a.join(' '));
+  const res = await call(env, '/', { headers: { 'User-Agent': 'curly-0.0.1', 'CF-Connecting-IP': '203.0.113.7' } });
+  assert.equal(res.status, 429);
+  assert.ok(!logged.some((l) => l.includes('203.0.113.7')));
+});
+
+test('per-request invocation logs and traces stay off (wrangler.toml)', () => {
+  const toml = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  assert.match(toml, /\[observability\.logs\][^[]*invocation_logs = false/);
+  assert.match(toml, /\[observability\.traces\]\s*\nenabled = false/);
 });
 
 test('uploads take the extension from the image type, not the file name', async () => {
