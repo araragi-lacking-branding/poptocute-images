@@ -8,7 +8,7 @@
 // The look follows the main page: white, Mincho serif, the same tag pills.
 
 import { escapeHtml, extractTagRefs, plainSummary, renderMarkdown, stripControlChars } from '../lib/markdown.js';
-import { FONT_HEAD, MINCHO_STACK } from '../lib/fonts.js';
+import { BODY_TEXT_CSS, DISPLAY_TEXT_CSS, fontHead } from '../lib/fonts.js';
 import {
   getPublicTag, getPublishedPost, isMissingTable, listPublishedPosts, refKey, resolveTagRefs,
 } from './data.js';
@@ -31,19 +31,20 @@ const PAGE_HEADERS = {
 const STYLES = `
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #fff; color: #333; }
-  body { font-family: ${MINCHO_STACK}; line-height: 1.75; padding: 1rem; }
+  body { ${BODY_TEXT_CSS} font-size: 17px; line-height: 1.9; padding: 1rem; }
+  .site .home, h1, h2, h3, h4, .posts .title { ${DISPLAY_TEXT_CSS} letter-spacing: 0.01em; }
   a { color: #333; }
   a:hover { color: #4ecdc4; }
   .wrap { max-width: 680px; margin: 0 auto; padding: 1.5rem 0 2rem; }
   .site { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3rem; }
-  .site .home { text-decoration: none; font-size: 1.05rem; }
+  .site .home { text-decoration: none; font-size: 1.15rem; }
   .site .section { color: #999; font-size: 0.9rem; text-decoration: none; }
-  h1 { font-size: 1.8rem; font-weight: normal; line-height: 1.35; margin: 0 0 0.35rem; }
-  h2, h3, h4 { font-weight: normal; line-height: 1.4; margin: 2rem 0 0.5rem; }
+  h1 { font-size: 2.05rem; line-height: 1.35; margin: 0 0 0.35rem; }
+  h2, h3, h4 { line-height: 1.4; margin: 2rem 0 0.5rem; }
   .meta { color: #999; font-size: 0.8rem; margin: 0 0 0.75rem; }
   .posts { list-style: none; padding: 0; margin: 0; }
   .posts li { margin: 0 0 2.5rem; }
-  .posts .title { font-size: 1.3rem; text-decoration: none; }
+  .posts .title { font-size: 1.5rem; text-decoration: none; }
   .posts .summary { color: #666; margin: 0.2rem 0 0.6rem; }
   .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.5rem; }
   .tag {
@@ -87,7 +88,7 @@ function page({ title, description = '', body, origin = '', status = 200, cache 
   ${description ? `<meta name="description" content="${escapeHtml(description)}">` : ''}
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="alternate" type="application/atom+xml" title="${escapeHtml(SITE_TITLE)} blog" href="${escapeHtml(origin)}/blog/feed.xml">
-  ${FONT_HEAD}
+  ${fontHead({ display: true })}
   <style>${STYLES}</style>
 </head>
 <body>
