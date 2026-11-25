@@ -8,6 +8,7 @@ import {
   updatePost, validatePostInput,
 } from '../blog/data.js';
 import { renderPostPage } from '../blog/pages.js';
+import { FONT_HEAD, MINCHO_STACK } from '../lib/fonts.js';
 
 function json(data, headers, status = 200) {
   return new Response(JSON.stringify(data), { status, headers });
@@ -325,6 +326,7 @@ export function generateBlogAdminUI() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Blog - Admin - *cute* and *pop*</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  ${FONT_HEAD}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
@@ -348,7 +350,7 @@ export function generateBlogAdminUI() {
     label { display: block; font-size: 12px; font-weight: 600; color: #666; margin: 14px 0 4px; }
     input[type=text], textarea, select { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font: inherit; font-size: 14px; background: #fff; }
     input:focus, textarea:focus, select:focus { outline: none; border-color: #4ecdc4; }
-    #title, #summary, #body { font-family: "Heisei Mincho", "MS Mincho", "SimSun", serif; }
+    #title, #summary, #body { font-family: ${MINCHO_STACK}; }
     #title { font-size: 20px; }
     #summary { font-size: 15px; }
     #body { font-size: 16px; line-height: 1.75; min-height: 360px; resize: vertical; }

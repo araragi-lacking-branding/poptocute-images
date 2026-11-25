@@ -6,6 +6,7 @@ import { verifyAccessRequest } from './lib/access.js';
 import { handleBlogRequest } from './blog/pages.js';
 import { isCrossSiteWrite, withAdminHeaders } from './lib/request-guards.js';
 import { escapeHtml } from './lib/html.js';
+import { FONT_HEAD, MINCHO_STACK } from './lib/fonts.js';
 import { PUBLIC_IMAGE_FROM, PUBLIC_IMAGE_WHERE, isImageKey, isImagePublic } from './lib/visibility.js';
 
 // src/index.js - Worker with Image Transformations via fetch
@@ -557,6 +558,7 @@ async function serveMainPage(env) {
       <link rel="icon" type="image/x-icon" href="favicon.ico">
       <link rel="preconnect" href="https://cutetopop.com">
       ${preloadLink}
+      ${FONT_HEAD}
       <style>
         * {
           box-sizing: border-box;
@@ -565,7 +567,7 @@ async function serveMainPage(env) {
         html, body {
           height: 100%;
           margin: 0;
-          font-family: "Heisei Mincho", "MS Mincho", "SimSun", serif;
+          font-family: ${MINCHO_STACK};
           background: #fff;
           overflow-y: auto;
         }

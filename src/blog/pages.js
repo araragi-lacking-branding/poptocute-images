@@ -7,6 +7,7 @@
 // The look follows the main page: white, Mincho serif, the same tag pills.
 
 import { escapeHtml, extractTagRefs, plainSummary, renderMarkdown, stripControlChars } from '../lib/markdown.js';
+import { FONT_HEAD, MINCHO_STACK } from '../lib/fonts.js';
 import {
   getPublicTag, getPublishedPost, isMissingTable, listPublishedPosts, refKey, resolveTagRefs,
 } from './data.js';
@@ -14,10 +15,10 @@ import {
 const PAGE_SIZE = 10;
 const SITE_TITLE = '*cute* and *pop*';
 
-// No scripts, no third-party anything; images only from this site
+// No scripts, no third-party anything; images, the font and its stylesheet only from this site
 const PAGE_HEADERS = {
   'Content-Type': 'text/html; charset=UTF-8',
-  'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
 };
@@ -25,7 +26,7 @@ const PAGE_HEADERS = {
 const STYLES = `
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #fff; color: #333; }
-  body { font-family: "Heisei Mincho", "MS Mincho", "SimSun", serif; line-height: 1.75; padding: 1rem; }
+  body { font-family: ${MINCHO_STACK}; line-height: 1.75; padding: 1rem; }
   a { color: #333; }
   a:hover { color: #4ecdc4; }
   .wrap { max-width: 680px; margin: 0 auto; padding: 1.5rem 0 2rem; }
@@ -82,6 +83,7 @@ function page({ title, description = '', body, origin = '', status = 200, cache 
   ${description ? `<meta name="description" content="${escapeHtml(description)}">` : ''}
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="alternate" type="application/atom+xml" title="${escapeHtml(SITE_TITLE)} blog" href="${escapeHtml(origin)}/blog/feed.xml">
+  ${FONT_HEAD}
   <style>${STYLES}</style>
 </head>
 <body>
